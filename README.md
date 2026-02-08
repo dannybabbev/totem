@@ -180,41 +180,102 @@ npm -v # Should print "11.6.2".
 * **Terminal Rows (The Middle):** Rows 1-60 are connected horizontally (A-E are linked, F-J are linked).
 * **The Divider:** The middle gap separates the Left side from the Right side.
 * **The T-Cobbler:** Bridges the Pi pins to the breadboard rows.
+* **Power Rails (The Sides):** Red (+) and Blue (-) rails run along the edges for distributing power.
+
+### 0. Create the Power Bus (Do This First!)
+
+We need to distribute 5V and GND to multiple components. Use the breadboard's side rails:
+
+1. **5V Rail:** Connect a jumper wire from **T-Cobbler 5V** (Pin 2 or 4) to the **Red (+) Rail** on the breadboard edge.
+2. **GND Rail:** Connect a jumper wire from **T-Cobbler GND** (Pin 6 or 9) to the **Blue (-) Rail** on the breadboard edge.
+
+Now all components can draw power from these rails instead of fighting for space on the T-Cobbler.
 
 ### 1. The Face (MAX7219 Matrix)
 
 *Connects via SPI. Use the **Left** side of the T-Cobbler.*
 
-| Matrix Pin | T-Cobbler Label | Physical Pin | Function |
-| --- | --- | --- | --- |
-| **VCC** | `5V` / `5V0` | Pin 2/4 | Power |
-| **GND** | `GND` | Pin 6/9 | Ground |
-| **DIN** | `SPIMOSI` / `GPIO 10` | Pin 19 | Data Input |
-| **CS** | `SPICE0` / `GPIO 8` | Pin 24 | Chip Select |
-| **CLK** | `SPISCLK` / `GPIO 11` | Pin 23 | Clock |
+| Matrix Pin | Connect To | Function |
+| --- | --- | --- |
+| **VCC** | **Red Rail** (5V) | Power |
+| **GND** | **Blue Rail** (GND) | Ground |
+| **DIN** | `SPIMOSI` / `GPIO 10` (Pin 19) | Data Input |
+| **CS** | `SPICE0` / `GPIO 8` (Pin 24) | Chip Select |
+| **CLK** | `SPISCLK` / `GPIO 11` (Pin 23) | Clock |
 
 **Test:** Run `python face.py` (Static) or `python animator.py` (Animated).
 
-### 2. The Voice (1602 LCD)
+### 2. The Display (1602 LCD)
 
 *Connects via I2C. Use the **Top Left** of the T-Cobbler.*
 
-| LCD Pin | T-Cobbler Label | Physical Pin | Function |
-| --- | --- | --- | --- |
-| **VCC** | `5V` / `5V0` | Pin 2/4 | Power |
-| **GND** | `GND` | Pin 6/9 | Ground |
-| **SDA** | `SDA1` / `GPIO 2` | Pin 3 | Data |
-| **SCL** | `SCL1` / `GPIO 3` | Pin 5 | Clock |
+| LCD Pin | Connect To | Function |
+| --- | --- | --- |
+| **VCC** | **Red Rail** (5V) | Power |
+| **GND** | **Blue Rail** (GND) | Ground |
+| **SDA** | `SDA1` / `GPIO 2` (Pin 3) | Data |
+| **SCL** | `SCL1` / `GPIO 3` (Pin 5) | Clock |
 
 **Test:** Run `python lcd_test.py`.
 
 ---
 
-## Part III: The Core (Combined)
+## Part III: The Voice (Speaker Setup)
+
+Since the Raspberry Pi 400 has no analog audio jack, we use **PWM (Pulse Width Modulation)** to generate audio over **GPIO 18**.
+
+**⚠️ CRITICAL:** Do NOT connect the speaker directly to GPIO pins. It draws too much power and will destroy the Pi. You must use the transistor circuit below.
+
+### 1. Wiring the Transistor Circuit
+
+Use the **NPN Transistor (S8050)** and a **1kΩ Resistor** (Brown-Black-Red).
+
+**Transistor Orientation:** Flat side facing you. Legs are **Emitter** (Left), **Base** (Middle), **Collector** (Right).
+
+| Component | Connect To |
+| --- | --- |
+| **Resistor (End A)** | **GPIO 18** (Pin 12 on T-Cobbler) |
+| **Resistor (End B)** | **Transistor Base** (Middle Pin) |
+| **Transistor Emitter** (Left) | **Blue Rail** (GND) |
+| **Transistor Collector** (Right) | **Speaker Wire (-)** (Black) |
+| **Speaker Wire (+)** (Red) | **Red Rail** (5V) |
+
+### 2. Software Configuration
+
+Tell the Pi to reroute audio to the GPIO pins.
+
+1. Open the config file:
+```bash
+sudo nano /boot/firmware/config.txt
+```
+
+2. Scroll to the bottom and add this line:
+```ini
+dtoverlay=audremap,pins_18_19
+```
+
+3. Save (`Ctrl+O`, `Enter`) and Exit (`Ctrl+X`).
+4. **Reboot:** `sudo reboot`
+
+### 3. Testing
+
+Once the Pi restarts, test the sound:
+
+1. **Set Volume:** Run `alsamixer`. Press `F6` to select the Default card, then use the **Up Arrow** to set volume to **85%** (too high causes distortion).
+2. **Play Sound:**
+```bash
+speaker-test -c2 -t wav
+```
+
+*You should hear a robotic voice saying "Front Left... Front Right".*
+
+---
+
+## Part IV: The Core (Combined)
 
 Run `python totem_core.py` to synchronize both the Face and LCD.
 
-## Part IV: Software Architecture
+## Part V: Software Architecture
 
 Totem uses a **daemon + CLI** architecture so that hardware stays initialized between commands and animations can run in the background.
 
@@ -292,7 +353,7 @@ New hardware components are added as modules in the `hardware/` package. Each mo
 
 ---
 
-## Part V: Install OpenClaw
+## Part VI: Install OpenClaw
 
 Install OpenClaw on the Raspberry Pi using the official installer:
 
@@ -310,7 +371,7 @@ This will configure your API key, pair a chat channel (WhatsApp, Telegram, etc.)
 
 ---
 
-## Part VI: Add the Totem Skill to OpenClaw
+## Part VII: Add the Totem Skill to OpenClaw
 
 ### 1. Copy the Skill
 
