@@ -20,10 +20,22 @@ Note: If using Pi 4B, use the CSI port between the HDMI and Audio jack.
 
 ### Phase 2: The Brain (OpenClaw)
 
+* [x] **Hardware Abstraction Layer:** Built `hardware/` package with `HardwareModule` interface.
+* [x] **Totem Daemon:** Built `totem_daemon.py` — background service for persistent hardware state.
+* [x] **Totem CLI:** Built `totem_ctl.py` — CLI for controlling hardware via daemon.
+* [x] **OpenClaw Skill:** Created `skills/totem/SKILL.md` — teaches agent to control hardware.
 * [ ] **Install OpenClaw:** Install the OpenClaw agent on the Pi.
-* [ ] **Configure Model:** Connect OpenClaw to a robust LLM.
-* [ ] **Create "Totem" Skill:** Write a custom Skill to control the face via Python scripts.
+* [ ] **Configure Model:** Connect OpenClaw to a robust LLM (Anthropic recommended).
 * [ ] **Voice Mode:** Enable OpenClaw's TTS/STT features.
+
+### Phase 3: Expansion (Planned)
+
+* [ ] **Servo Motor:** SG90 servo for head nod/shake (`hardware/servo.py`).
+* [ ] **Audio:** USB Microphone + Speaker (`hardware/microphone.py`, `hardware/speaker.py`).
+* [ ] **Camera:** USB Webcam for vision (`hardware/camera.py`).
+* [ ] **Sensors:** HC-SR04 distance, DHT11 temperature (`hardware/distance.py`, `hardware/temperature.py`).
+* [ ] **Touch:** Capacitive touch sensor (`hardware/touch.py`).
+* [ ] **Lighting:** WS2812B NeoPixel LED strip (`hardware/neopixel.py`).
 
 ---
 
@@ -201,6 +213,136 @@ npm -v # Should print "11.6.2".
 ## Part III: The Core (Combined)
 
 Run `python totem_core.py` to synchronize both the Face and LCD.
+
+## Part IV: Software Architecture
+
+Totem uses a **daemon + CLI** architecture so that hardware stays initialized between commands and animations can run in the background.
+
+```
+OpenClaw Agent (AI)
+    │  exec tool (shell command)
+    ▼
+totem_ctl.py (CLI client)
+    │  JSON over Unix socket
+    ▼
+totem_daemon.py (background service)
+    │  Hardware Registry (auto-discovers modules)
+    ▼
+hardware/ package
+    ├── face.py    → MAX7219 LED Matrix (SPI)
+    ├── lcd.py     → 1602 LCD Display (I2C)
+    └── (future)   → servo.py, mic.py, distance.py, ...
+```
+
+### Project File Structure
+
+```
+totem/
+├── hardware/                  # Modular hardware abstraction layer
+│   ├── __init__.py
+│   ├── base.py                # HardwareModule abstract base class
+│   ├── face.py                # MAX7219 face (expressions, drawing, animations)
+│   └── lcd.py                 # 1602 LCD (text, custom chars, full HD44780 API)
+├── expressions.py             # Face bitmap library (all 8x8 grids)
+├── totem_daemon.py            # Background daemon (Unix socket server)
+├── totem_ctl.py               # CLI client (sends JSON commands to daemon)
+├── skills/
+│   └── totem/
+│       └── SKILL.md           # OpenClaw skill definition
+├── face.py                    # Original face test script
+├── lcd_test.py                # Original LCD test script
+├── totem_core.py              # Original combined demo script
+├── requirements.txt           # Python dependencies
+├── CONTRIBUTING.md            # Guide for adding new hardware modules
+└── README.md                  # This file
+```
+
+### Starting the Daemon
+
+```bash
+cd ~/totem
+source env/bin/activate
+python totem_daemon.py
+```
+
+The daemon discovers all hardware modules in `hardware/`, initializes them, and listens for commands on `/tmp/totem.sock`.
+
+### Testing with the CLI
+
+```bash
+# Check daemon is alive
+python totem_ctl.py ping
+
+# Set a happy face
+python totem_ctl.py face expression happy
+
+# Write to LCD
+python totem_ctl.py lcd write "Hello!" --line2 "I am Totem"
+
+# Coordinated emotion (face + LCD together)
+python totem_ctl.py express thinking --message "Processing..."
+
+# See all available hardware and actions
+python totem_ctl.py capabilities
+```
+
+### Adding New Hardware
+
+New hardware components are added as modules in the `hardware/` package. Each module implements the `HardwareModule` interface. The daemon auto-discovers new modules on restart. See [CONTRIBUTING.md](CONTRIBUTING.md) for a complete guide with a worked example.
+
+---
+
+## Part V: Install OpenClaw
+
+Install OpenClaw on the Raspberry Pi using the official installer:
+
+```bash
+curl -fsSL https://openclaw.ai/install.sh | bash
+```
+
+Follow the on-screen prompts to complete the setup. Once installed, run the onboarding wizard:
+
+```bash
+openclaw onboard --install-daemon
+```
+
+This will configure your API key, pair a chat channel (WhatsApp, Telegram, etc.), and install the background service.
+
+---
+
+## Part VI: Add the Totem Skill to OpenClaw
+
+### 1. Copy the Skill
+
+```bash
+cp -r ~/totem/skills/totem ~/.openclaw/skills/totem
+```
+
+### 2. Verify the Skill is Loaded
+
+Start a new OpenClaw session and ask the agent to run:
+
+```
+totem_ctl capabilities
+```
+
+If it returns the list of modules and actions, the skill is working.
+
+### 3. Start Totem + OpenClaw
+
+Make sure the Totem daemon is running before (or alongside) OpenClaw:
+
+```bash
+# Terminal 1: Start the Totem daemon
+cd ~/totem && source env/bin/activate && python totem_daemon.py
+
+# Terminal 2: Start the OpenClaw gateway
+openclaw gateway --port 18789
+```
+
+The OpenClaw agent will see the `totem-hardware` skill and can control all hardware via `totem_ctl` commands. Try messaging it: *"Show me a happy face and say hello on the LCD."*
+
+---
 
 ## Troubleshooting
 
