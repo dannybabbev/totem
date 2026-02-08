@@ -1,12 +1,12 @@
 ---
 name: totem-hardware
-description: Control Totem robot hardware - LED face, LCD display, animations, and custom drawing. Run `totem_ctl capabilities` to discover all available hardware and actions.
+description: Control Totem robot hardware - LED face, LCD display, audio playback, animations, and custom drawing. Run `totem_ctl capabilities` to discover all available hardware and actions.
 metadata: {"openclaw":{"requires":{"bins":["python3"]}}}
 ---
 
 # Totem Hardware Control
 
-You are controlling **Totem**, a Raspberry Pi desktop companion robot. You have FULL control over its physical hardware through the `totem_ctl` CLI. You can express emotions, draw custom graphics, create icons, design animations, and display any information you want.
+You are controlling **Totem**, a Raspberry Pi desktop companion robot. You have FULL control over its physical hardware through the `totem_ctl` CLI. You can express emotions, draw custom graphics, create icons, design animations, play sounds, and display any information you want.
 
 **Important:** The Totem daemon must be running. If commands fail with "daemon not running", start it:
 ```bash
@@ -23,6 +23,7 @@ Run `totem_ctl capabilities` to dynamically discover all available hardware modu
 |-----------|---------|------------|-----------|
 | **Face** (MAX7219) | 8x8 LED matrix | 64 pixels | SPI |
 | **LCD** (1602) | Character display | 16 cols x 2 rows | I2C |
+| **Sound** (pygame) | Audio playback | WAV/OGG/MP3 | ALSA/PWM |
 
 ---
 
@@ -168,6 +169,27 @@ totem_ctl lcd raw_write 0x41           # Write 'A' directly
 
 ---
 
+## Quick Reference: Sound (Audio Playback)
+
+Audio output through the speaker (GPIO 18 PWM via transistor circuit). Supports WAV, OGG, and MP3 files.
+
+### Playing Sounds
+```bash
+totem_ctl sound play /path/to/file.wav
+totem_ctl sound play /path/to/alert.ogg --volume 0.5
+totem_ctl sound play /path/to/ambient.wav --loop
+```
+
+### Playback Control
+```bash
+totem_ctl sound stop                   # Stop all playback
+totem_ctl sound pause                  # Pause current playback
+totem_ctl sound resume                 # Resume paused playback
+totem_ctl sound volume 75              # Set master volume (0-100)
+```
+
+---
+
 ## Compound Commands
 
 ### Express (coordinated face + LCD)
@@ -213,6 +235,9 @@ totem_ctl --json '{"module":"face","action":"pixel","params":{"x":3,"y":4,"on":1
 - **When confused:** Use `express confused --message "Could you clarify?"`.
 - **When showing an error:** Use `express sad` or `face expression cross`.
 - **When showing success:** Use `face expression check` or `express happy`.
+- **When greeting:** Pair a short chime with the happy face expression for a warm welcome.
+- **When alerting/erroring:** Play a short alert sound alongside the error face expression.
+- **For ambient audio:** Use `--loop` for background sounds; always `sound stop` when done.
 - **Be creative!** Design custom faces, icons, and animations. The hardware is your canvas.
-- **Use batch commands** when you need to update face and LCD simultaneously for coordinated reactions.
+- **Use batch commands** when you need to update face, LCD, and sound simultaneously for coordinated reactions.
 - **Use `totem_ctl status`** to check current hardware state before making changes.

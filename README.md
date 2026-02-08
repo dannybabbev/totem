@@ -11,7 +11,8 @@ A Raspberry Pi-based desktop companion robot featuring an animated 8x8 LED matri
 * [x] **The Voice (Text):** Connect 1602 LCD and run `lcd_test.py`.
 * [x] **Core Integration:** Run `totem_core.py` to sync Face and LCD.
 * [ ] **Connect Servo Motor:** Wire SG90 servo for neck movement (Nod/Shake).
-* [ ] **Connect Audio:** Setup USB Microphone (Ears) and Speaker (Mouth).
+* [x] **Connect Audio (Speaker):** Speaker wired via GPIO 18 PWM, `hardware/sound.py` module added.
+* [ ] **Connect Audio (Microphone):** Setup USB Microphone (Ears).
 * [ ] **Connect Camera:** Give the robot sight.
 
 Note: If using Raspberry Pi 400, you must use a USB Webcam. The SunFounder CSI ribbon-cable camera will not fit inside the keyboard unit.
@@ -31,7 +32,8 @@ Note: If using Pi 4B, use the CSI port between the HDMI and Audio jack.
 ### Phase 3: Expansion (Planned)
 
 * [ ] **Servo Motor:** SG90 servo for head nod/shake (`hardware/servo.py`).
-* [ ] **Audio:** USB Microphone + Speaker (`hardware/microphone.py`, `hardware/speaker.py`).
+* [x] **Speaker:** Audio playback via pygame mixer (`hardware/sound.py`).
+* [ ] **Microphone:** USB Microphone for voice input (`hardware/microphone.py`).
 * [ ] **Camera:** USB Webcam for vision (`hardware/camera.py`).
 * [ ] **Sensors:** HC-SR04 distance, DHT11 temperature (`hardware/distance.py`, `hardware/temperature.py`).
 * [ ] **Touch:** Capacitive touch sensor (`hardware/touch.py`).
