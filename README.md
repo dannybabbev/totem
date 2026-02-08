@@ -38,7 +38,9 @@ Note: If using Pi 4B, use the CSI port between the HDMI and Audio jack.
 
 ---
 
-## Part 0: First Time Setup (NOOBS)
+## Part 0: First Time Setup
+
+> **Note:** Do not use NOOBS. Instead, follow the official [Raspberry Pi Imager guide](https://www.raspberrypi.com/software/) to flash a **64-bit Raspberry Pi OS** to your SD card before first boot. This ensures better performance and compatibility with modern software.
 
 If you have just unboxed your Raspberry Pi kit, follow these steps to install the Operating System.
 
@@ -51,11 +53,12 @@ If you have just unboxed your Raspberry Pi kit, follow these steps to install th
 
 ### 2. Install Raspberry Pi OS
 
+> **Recommended:** Use [Raspberry Pi Imager](https://www.raspberrypi.com/software/) to flash **Raspberry Pi OS (64-bit)** to your SD card before powering on your Pi. This method is faster and more reliable than NOOBS.
+
+If you are using a pre-installed NOOBS SD card:
+
 1. **The Installer:** Upon first boot, you will see the NOOBS / Raspberry Pi Recovery window.
-2. **Select OS:** Check the box next to **Raspberry Pi OS (32-bit)** (Recommended).
-* *Note:* You can choose 64-bit if you prefer, but 32-bit is often more compatible with older hardware libraries.
-
-
+2. **Select OS:** Check the box next to **Raspberry Pi OS (64-bit)** if available.
 3. **Install:** Click the **Install** button (or press `i`).
 4. **Wait:** The system will install. This takes 10-20 minutes.
 5. **Reboot:** Click **OK** when finished. The Pi will restart into the desktop.
@@ -87,7 +90,18 @@ sudo apt-get install -y python3-pip python3-venv python3-dev libjpeg-dev zlib1g-
 
 ```
 
-### 2. Enable Hardware Interfaces
+### 2. Clone the Project Repository
+
+Clone the Totem project from GitHub to your home directory.
+
+```bash
+cd ~
+git clone https://github.com/dannybabbev/totem.git
+cd totem
+
+```
+
+### 3. Enable Hardware Interfaces
 
 1. Run `sudo raspi-config`
 2. Navigate to **Interface Options**.
@@ -95,18 +109,17 @@ sudo apt-get install -y python3-pip python3-venv python3-dev libjpeg-dev zlib1g-
 4. **I2C** -> Select **Yes** to enable.
 5. **Finish** and **Reboot** the Pi.
 
-### 3. Verify Hardware
+### 4. Verify Hardware
 
 * **Check SPI:** `ls /dev/spi*` (Should show `/dev/spidev0.0`)
 * **Check I2C:** `sudo i2cdetect -y 1` (Should show a number like `27` or `3f`)
 
-### 4. Python Environment Setup
+### 5. Python Environment Setup
 
-Create a virtual environment to keep the project isolated.
+Create a virtual environment in the cloned project directory.
 
 ```bash
-mkdir ~/Totem
-cd ~/Totem
+# You should already be in ~/totem from step 2
 python3 -m venv env
 source env/bin/activate
 
@@ -114,13 +127,35 @@ source env/bin/activate
 
 *(Always run `source env/bin/activate` before working)*
 
-### 5. Install Python Libraries
+### 6. Install Python Libraries
 
 Install all dependencies from the `requirements.txt` file.
 
 ```bash
 pip install --upgrade pip
 pip install -r requirements.txt
+
+```
+
+### 7. Install Node.js (via nvm)
+
+Install Node.js to support JavaScript-based tools and OpenClaw integration.
+
+```bash
+# Download and install nvm:
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+
+# in lieu of restarting the shell
+\. "$HOME/.nvm/nvm.sh"
+
+# Download and install Node.js:
+nvm install 24
+
+# Verify the Node.js version:
+node -v # Should print "v24.13.0".
+
+# Verify npm version:
+npm -v # Should print "11.6.2".
 
 ```
 
