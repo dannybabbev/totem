@@ -12,6 +12,3 @@ spidev>=3.5
 
 # Image processing (required by luma)
 Pillow>=8.1.0
-
-# Audio playback (speaker)
-pygame>=2.5.0

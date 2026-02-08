@@ -25,10 +25,6 @@ Examples:
     totem_ctl lcd write_char 0
     totem_ctl lcd cursor_mode blink
 
-    totem_ctl sound play /path/to/file.wav
-    totem_ctl sound play /path/to/alert.ogg --volume 0.5
-    totem_ctl sound volume 75
-
     totem_ctl express happy --message "Feeling great!"
     totem_ctl batch '[{"module":"face","action":"expression","params":{"name":"happy"}}]'
 """
@@ -211,24 +207,6 @@ def build_lcd_command(args):
     return {"module": "lcd", "action": action, "params": params}
 
 
-def build_sound_command(args):
-    """Build a sound module command from CLI args."""
-    action = args.sound_action
-    params = {}
-
-    if action == "play":
-        params["file"] = args.file
-        if args.volume is not None:
-            params["volume"] = args.volume
-        if args.loop:
-            params["loop"] = True
-    elif action == "volume":
-        params["level"] = int(args.level)
-    # stop, pause, resume need no params
-
-    return {"module": "sound", "action": action, "params": params}
-
-
 def main():
     parser = argparse.ArgumentParser(
         prog="totem_ctl",
@@ -398,29 +376,6 @@ def main():
     # lcd stop_scroll
     lcd_sub.add_parser("stop_scroll", help="Stop scrolling text")
 
-    # --- Sound ---
-    sub_sound = subparsers.add_parser("sound", help="Audio playback control")
-    sound_sub = sub_sound.add_subparsers(dest="sound_action", help="Sound action")
-
-    # sound play <file> [--volume 0.8] [--loop]
-    sp = sound_sub.add_parser("play", help="Play an audio file")
-    sp.add_argument("file", help="Path to audio file (WAV, OGG, MP3)")
-    sp.add_argument("--volume", "-v", type=float, default=None, help="Volume (0.0-1.0)")
-    sp.add_argument("--loop", action="store_true", help="Loop continuously")
-
-    # sound stop
-    sound_sub.add_parser("stop", help="Stop all audio playback")
-
-    # sound pause
-    sound_sub.add_parser("pause", help="Pause current playback")
-
-    # sound resume
-    sound_sub.add_parser("resume", help="Resume paused playback")
-
-    # sound volume <level>
-    sp = sound_sub.add_parser("volume", help="Set master volume (0-100)")
-    sp.add_argument("level", help="Volume percentage (0-100)")
-
     # --- Parse and execute ---
     args = parser.parse_args()
 
@@ -472,13 +427,6 @@ def main():
             sub_lcd.print_help()
             return
         cmd = build_lcd_command(args)
-        response = send_command(cmd)
-        print_response(response)
-    elif args.command == "sound":
-        if not args.sound_action:
-            sub_sound.print_help()
-            return
-        cmd = build_sound_command(args)
         response = send_command(cmd)
         print_response(response)
     else:
