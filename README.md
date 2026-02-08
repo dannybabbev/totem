@@ -314,8 +314,10 @@ This will configure your API key, pair a chat channel (WhatsApp, Telegram, etc.)
 
 ### 1. Copy the Skill
 
+Create the OpenClaw skills directory and copy the Totem skill:
+
 ```bash
-cp -r ~/totem/skills/totem ~/.openclaw/skills/totem
+mkdir -p ~/.openclaw/skills && cp -r ~/totem/skills/totem ~/.openclaw/skills/totem
 ```
 
 ### 2. Verify the Skill is Loaded

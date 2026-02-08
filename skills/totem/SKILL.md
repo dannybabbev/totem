@@ -10,7 +10,7 @@ You are controlling **Totem**, a Raspberry Pi desktop companion robot. You have 
 
 **Important:** The Totem daemon must be running. If commands fail with "daemon not running", start it:
 ```bash
-cd ~/Totem && source env/bin/activate && python totem_daemon.py &
+cd ~/totem && source env/bin/activate && python totem_daemon.py &
 ```
 
 Run `totem_ctl capabilities` to dynamically discover all available hardware modules and actions.
