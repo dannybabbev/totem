@@ -1,6 +1,10 @@
 # Project Totem
 
-A Raspberry Pi-based desktop companion robot featuring an animated 8x8 LED matrix face, a 1602 LCD status display, and an **OpenClaw** AI brain.
+**Giving an AI agent a body for the first time.**
+
+Totem is a Raspberry Pi-based companion robot powered by **[OpenClaw](https://github.com/openclaw/openclaw)**. It starts with an animated 8x8 LED matrix face and a 1602 LCD display — but that's just the beginning. The hardware layer is modular and designed to grow: add a servo for neck movement, a microphone for ears, a speaker for voice, a camera for sight, sensors for touch and awareness. Every new module snaps in and the AI agent can immediately use it.
+
+This isn't a static gadget. It's a body that expands endlessly, giving your AI agent a physical presence in the real world.
 
 ## Project Roadmap (Status)
 
@@ -328,6 +332,8 @@ New hardware components are added as modules in the `hardware/` package. Each mo
 
 ## Part V: Install OpenClaw
 
+[OpenClaw](https://github.com/openclaw/openclaw) is an open-source personal AI assistant that runs on your own devices. It connects to messaging channels (Telegram, WhatsApp, Slack, Discord, etc.) and uses LLM providers like Anthropic or OpenAI to power the conversation. In this project, OpenClaw is the brain that controls Totem's hardware.
+
 ### 1. Get an API Key
 
 OpenClaw needs an LLM API key to function. Choose one of the following providers:
@@ -389,7 +395,7 @@ Try sending it a message: *"Show me a happy face and say hello on the LCD."*
 
 ## Part VII: Understanding OpenClaw
 
-OpenClaw is the AI agent that gives Totem its personality and intelligence. It reads a set of markdown files to know who it is, who you are, and what it can do. Everything lives in the workspace at `~/.openclaw/workspace/`.
+[OpenClaw](https://github.com/openclaw/openclaw) is the AI agent that gives Totem its personality and intelligence. It reads a set of markdown files to know who it is, who you are, and what it can do. Everything lives in the workspace at `~/.openclaw/workspace/`. See the [full documentation](https://github.com/openclaw/openclaw#agent-workspace--skills) for more details.
 
 ### Personality & Identity
 
