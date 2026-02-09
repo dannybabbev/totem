@@ -24,8 +24,8 @@ Note: If using Pi 4B, use the CSI port between the HDMI and Audio jack.
 * [x] **Totem Daemon:** Built `totem_daemon.py` — background service for persistent hardware state.
 * [x] **Totem CLI:** Built `totem_ctl.py` — CLI for controlling hardware via daemon.
 * [x] **OpenClaw Skill:** Created `skills/totem/SKILL.md` — teaches agent to control hardware.
-* [ ] **Install OpenClaw:** Install the OpenClaw agent on the Pi.
-* [ ] **Configure Model:** Connect OpenClaw to a robust LLM (Anthropic recommended).
+* [x] **Install OpenClaw:** Install the OpenClaw agent on the Pi.
+* [x] **Configure Model:** Connect OpenClaw to a robust LLM (Anthropic recommended).
 * [ ] **Voice Mode:** Enable OpenClaw's TTS/STT features.
 
 ### Phase 3: Expansion (Planned)
@@ -52,39 +52,31 @@ Note: If using Pi 4B, use the CSI port between the HDMI and Audio jack.
 
 ## Part 0: First Time Setup
 
-> **Note:** Do not use NOOBS. Instead, follow the official [Raspberry Pi Imager guide](https://www.raspberrypi.com/software/) to flash a **64-bit Raspberry Pi OS** to your SD card before first boot. This ensures better performance and compatibility with modern software.
+If you have just unboxed your Raspberry Pi kit, follow the official [Raspberry Pi Imager tutorial](https://www.raspberrypi.com/software/) to install the Operating System.
 
-If you have just unboxed your Raspberry Pi kit, follow these steps to install the Operating System.
+### 1. Flash the SD Card with Raspberry Pi Imager
 
-### 1. Hardware Connections
+1. **Download** [Raspberry Pi Imager](https://www.raspberrypi.com/software/) on your computer (Windows, macOS, or Linux).
+2. **Insert** your MicroSD card into your computer.
+3. **Open** Raspberry Pi Imager and select:
+   * **Device:** Your Raspberry Pi model (e.g. Pi 400, Pi 4B).
+   * **OS:** **Raspberry Pi OS (64-bit)** — always use 64-bit for better performance and compatibility.
+   * **Storage:** Your MicroSD card.
+4. **Click Next**, then **Edit Settings** to pre-configure your Pi:
+   * Set **hostname** (e.g. `totem`).
+   * Set **username and password**.
+   * Enter your **WiFi network name and password**.
+   * Set **locale and timezone**.
+   * Under the **Services** tab, enable **SSH** if you want remote access.
+5. **Save** and confirm. The Imager will flash and verify the SD card.
 
-1. **Insert SD Card:** Ensure the MicroSD card (with NOOBS pre-installed) is inserted into the slot on the back of the Pi.
+### 2. First Boot
+
+1. **Insert SD Card:** Put the flashed MicroSD card into the slot on the back of the Pi.
 2. **Connect Monitor:** Plug the Micro-HDMI cable into the port labeled **HDMI0** (closest to the power port). If you use HDMI1, you may not see the boot screen. Connect the other end to your monitor.
 3. **Connect Peripherals:** Plug in your Mouse and Keyboard (if not using a Pi 400).
 4. **Connect Power:** Plug in the USB-C power supply last. The red LED on the Pi should light up, and the monitor should wake up.
-
-### 2. Install Raspberry Pi OS
-
-> **Recommended:** Use [Raspberry Pi Imager](https://www.raspberrypi.com/software/) to flash **Raspberry Pi OS (64-bit)** to your SD card before powering on your Pi. This method is faster and more reliable than NOOBS.
-
-If you are using a pre-installed NOOBS SD card:
-
-1. **The Installer:** Upon first boot, you will see the NOOBS / Raspberry Pi Recovery window.
-2. **Select OS:** Check the box next to **Raspberry Pi OS (64-bit)** if available.
-3. **Install:** Click the **Install** button (or press `i`).
-4. **Wait:** The system will install. This takes 10-20 minutes.
-5. **Reboot:** Click **OK** when finished. The Pi will restart into the desktop.
-
-### 3. Initial Configuration
-
-1. **Welcome Wizard:** Follow the on-screen prompts.
-* Set **Country/Language**.
-* Set **Password** (Default user is usually `pi` or you create a new one).
-* **Connect to WiFi.**
-* **Update Software:** Allow it to download updates if asked.
-
-
-2. **Restart:** Reboot one last time to apply updates.
+5. **Wait:** The Pi will boot directly into the desktop. WiFi, username, and password are already configured from the Imager — no setup wizard needed.
 
 ---
 
@@ -163,6 +155,14 @@ curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
 # Download and install Node.js:
 nvm install 24
 
+# Set Node 24 as the default for all sessions and processes:
+nvm alias default 24
+
+# Symlink node/npm to /usr/local/bin so non-interactive processes (systemd, cron) can find them:
+sudo ln -sf "$(which node)" /usr/local/bin/node
+sudo ln -sf "$(which npm)" /usr/local/bin/npm
+sudo ln -sf "$(which npx)" /usr/local/bin/npx
+
 # Verify the Node.js version:
 node -v # Should print "v24.13.0".
 
@@ -218,64 +218,11 @@ Now all components can draw power from these rails instead of fighting for space
 
 **Test:** Run `python lcd_test.py`.
 
----
-
-## Part III: The Voice (Speaker Setup)
-
-Since the Raspberry Pi 400 has no analog audio jack, we use **PWM (Pulse Width Modulation)** to generate audio over **GPIO 18**.
-
-**⚠️ CRITICAL:** Do NOT connect the speaker directly to GPIO pins. It draws too much power and will destroy the Pi. You must use the transistor circuit below.
-
-### 1. Wiring the Transistor Circuit
-
-Use the **NPN Transistor (S8050)** and a **1kΩ Resistor** (Brown-Black-Red).
-
-**Transistor Orientation:** Flat side facing you. Legs are **Emitter** (Left), **Base** (Middle), **Collector** (Right).
-
-| Component | Connect To |
-| --- | --- |
-| **Resistor (End A)** | **GPIO 18** (Pin 12 on T-Cobbler) |
-| **Resistor (End B)** | **Transistor Base** (Middle Pin) |
-| **Transistor Emitter** (Left) | **Blue Rail** (GND) |
-| **Transistor Collector** (Right) | **Speaker Wire (-)** (Black) |
-| **Speaker Wire (+)** (Red) | **Red Rail** (5V) |
-
-### 2. Software Configuration
-
-Tell the Pi to reroute audio to the GPIO pins.
-
-1. Open the config file:
-```bash
-sudo nano /boot/firmware/config.txt
-```
-
-2. Scroll to the bottom and add this line:
-```ini
-dtoverlay=audremap,pins_18_19
-```
-
-3. Save (`Ctrl+O`, `Enter`) and Exit (`Ctrl+X`).
-4. **Reboot:** `sudo reboot`
-
-### 3. Testing
-
-Once the Pi restarts, test the sound:
-
-1. **Set Volume:** Run `alsamixer`. Press `F6` to select the Default card, then use the **Up Arrow** to set volume to **85%** (too high causes distortion).
-2. **Play Sound:**
-```bash
-speaker-test -c2 -t wav
-```
-
-*You should hear a robotic voice saying "Front Left... Front Right".*
-
----
-
-## Part IV: The Core (Combined)
+## Part III: The Core (Combined)
 
 Run `python totem_core.py` to synchronize both the Face and LCD.
 
-## Part V: Software Architecture
+## Part IV: Software Architecture
 
 Totem uses a **daemon + CLI** architecture so that hardware stays initialized between commands and animations can run in the background.
 
@@ -318,15 +265,41 @@ totem/
 └── README.md                  # This file
 ```
 
-### Starting the Daemon
+### Setting Up the Daemon as a Service
+
+Run the install script to register the Totem daemon as a systemd user service. This makes it start automatically on boot:
 
 ```bash
 cd ~/totem
-source env/bin/activate
-python totem_daemon.py
+bash install-service.sh
 ```
 
 The daemon discovers all hardware modules in `hardware/`, initializes them, and listens for commands on `/tmp/totem.sock`.
+
+### Managing the Daemon
+
+```bash
+# Restart the daemon (after code changes)
+systemctl --user restart totem-daemon.service
+
+# Check status
+systemctl --user status totem-daemon.service
+
+# Stop it
+systemctl --user stop totem-daemon.service
+
+# Start it
+systemctl --user start totem-daemon.service
+
+# View logs
+journalctl --user -u totem-daemon.service -f
+
+# Disable auto-start (if needed)
+systemctl --user disable totem-daemon.service
+
+# Re-enable auto-start
+systemctl --user enable totem-daemon.service
+```
 
 ### Testing with the CLI
 
@@ -353,32 +326,47 @@ New hardware components are added as modules in the `hardware/` package. Each mo
 
 ---
 
-## Part VI: Install OpenClaw
+## Part V: Install OpenClaw
 
-Install OpenClaw on the Raspberry Pi using the official installer:
+### 1. Get an API Key
+
+OpenClaw needs an LLM API key to function. Choose one of the following providers:
+
+* **Anthropic (Recommended):** Go to [console.anthropic.com](https://console.anthropic.com/), create an account, navigate to **API Keys**, and generate a new key.
+* **OpenAI:** Go to [platform.openai.com](https://platform.openai.com/), create an account, navigate to **API Keys**, and generate a new key.
+
+> **Note:** Both platforms require a payment method. Keep your API key safe — you will need it during the installation.
+
+### 2. Install OpenClaw
+
+Run the installer on the Raspberry Pi:
 
 ```bash
 curl -fsSL https://openclaw.ai/install.sh | bash
 ```
 
-Follow the on-screen prompts to complete the setup. Once installed, run the onboarding wizard:
+Follow the on-screen prompts. When asked for your API key, paste the key you generated above.
 
-```bash
-openclaw onboard --install-daemon
-```
+During onboarding, you will be asked to connect a chat channel. **Telegram is the easiest option** — here's how to set it up:
 
-This will configure your API key, pair a chat channel (WhatsApp, Telegram, etc.), and install the background service.
+1. Open Telegram and search for **@BotFather**.
+2. Send `/newbot` and follow the prompts to name your bot.
+3. BotFather will give you a **Bot Token** — copy it.
+4. Paste the token when the onboarding wizard asks for your Telegram connection.
+
+This will configure your API provider, connect your Telegram bot, and install the background service.
 
 ---
 
-## Part VII: Add the Totem Skill to OpenClaw
+## Part VI: Add the Totem Skill to OpenClaw
 
-### 1. Copy the Skill
+### 1. Deploy the Skill
 
-Create the OpenClaw skills directory and copy the Totem skill:
+Run the deploy script to copy the Totem skill to OpenClaw and restart the daemon:
 
 ```bash
-mkdir -p ~/.openclaw/skills && cp -r ~/totem/skills/totem ~/.openclaw/skills/totem
+cd ~/totem
+bash deploy.sh
 ```
 
 ### 2. Verify the Skill is Loaded
@@ -391,19 +379,59 @@ totem_ctl capabilities
 
 If it returns the list of modules and actions, the skill is working.
 
-### 3. Start Totem + OpenClaw
+### 3. You're Ready!
 
-Make sure the Totem daemon is running before (or alongside) OpenClaw:
+That's it — your robot is alive. Open your Telegram bot and start chatting. The OpenClaw agent will see the `totem-hardware` skill and can control all hardware via `totem_ctl` commands.
 
-```bash
-# Terminal 1: Start the Totem daemon
-cd ~/totem && source env/bin/activate && python totem_daemon.py
+Try sending it a message: *"Show me a happy face and say hello on the LCD."*
 
-# Terminal 2: Start the OpenClaw gateway
-openclaw gateway --port 18789
-```
+---
 
-The OpenClaw agent will see the `totem-hardware` skill and can control all hardware via `totem_ctl` commands. Try messaging it: *"Show me a happy face and say hello on the LCD."*
+## Part VII: Understanding OpenClaw
+
+OpenClaw is the AI agent that gives Totem its personality and intelligence. It reads a set of markdown files to know who it is, who you are, and what it can do. Everything lives in the workspace at `~/.openclaw/workspace/`.
+
+### Personality & Identity
+
+| File | Purpose |
+| --- | --- |
+| `SOUL.md` | Core personality, values, and boundaries |
+| `IDENTITY.md` | Who the robot is — name, vibe, embodiment |
+| `AGENTS.md` | Operational guidelines — how it works, when to speak, how to behave |
+
+Edit these files to change your robot's personality. Want it to be sarcastic? Zen? Formal? Change `SOUL.md`.
+
+### About You
+
+| File | Purpose |
+| --- | --- |
+| `USER.md` | Info about you — name, timezone, interests, what you're building |
+
+OpenClaw reads this to personalize its responses. Update it any time.
+
+### Memory
+
+| File / Folder | Purpose |
+| --- | --- |
+| `MEMORY.md` | Long-term curated memories (important moments, milestones) |
+| `memory/` | Daily logs in `YYYY-MM-DD.md` format (auto-generated) |
+
+The agent writes daily logs automatically and promotes important memories to `MEMORY.md`.
+
+### Tools & Hardware
+
+| File | Purpose |
+| --- | --- |
+| `TOOLS.md` | Hardware control notes — Totem commands and usage |
+| `skills/totem/SKILL.md` | The Totem skill definition (copied by `deploy.sh`) |
+
+### Other
+
+| File | Purpose |
+| --- | --- |
+| `HEARTBEAT.md` | Periodic check instructions (scheduled tasks, reminders) |
+
+> **Tip:** You can edit any of these files directly to customize your robot. Changes take effect on the next conversation.
 
 ---
 
