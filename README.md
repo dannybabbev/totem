@@ -64,7 +64,7 @@ If you have just unboxed your Raspberry Pi kit, follow the official [Raspberry P
 2. **Insert** your MicroSD card into your computer.
 3. **Open** Raspberry Pi Imager and select:
    * **Device:** Your Raspberry Pi model (e.g. Pi 400, Pi 4B).
-   * **OS:** **Raspberry Pi OS (64-bit)** — always use 64-bit for better performance and compatibility.
+   * **OS:** **Raspberry Pi OS (64-bit)** — 64-bit is **required** for OpenClaw to run.
    * **Storage:** Your MicroSD card.
 4. **Click Next**, then **Edit Settings** to pre-configure your Pi:
    * Set **hostname** (e.g. `totem`).
@@ -333,6 +333,8 @@ New hardware components are added as modules in the `hardware/` package. Each mo
 ## Part V: Install OpenClaw
 
 [OpenClaw](https://github.com/openclaw/openclaw) is an open-source personal AI assistant that runs on your own devices. It connects to messaging channels (Telegram, WhatsApp, Slack, Discord, etc.) and uses LLM providers like Anthropic or OpenAI to power the conversation. In this project, OpenClaw is the brain that controls Totem's hardware.
+
+> **Note:** OpenClaw requires a **64-bit OS**. Make sure you flashed Raspberry Pi OS (64-bit) in Part 0.
 
 ### 1. Get an API Key
 
