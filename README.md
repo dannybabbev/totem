@@ -222,6 +222,29 @@ Now all components can draw power from these rails instead of fighting for space
 
 **Test:** Run `python lcd_test.py`.
 
+### 3. Touch Sensor (TTP223)
+
+*Connects via GPIO. Runs on 3.3V — do NOT connect to the 5V rail.*
+
+#### Setting Up the 3.3V Side (Right Rails)
+
+The touch sensor needs 3.3V power. Create a separate power bus on the **right side** of the breadboard so it stays away from the 5V rail:
+
+1. **Red Rail (Right):** Connect a wire from the T-Cobbler's **3V3** pin to the **Red (+) Rail** on the right side.
+2. **Blue Rail (Right):** Connect a wire from the T-Cobbler's **GND** pin to the **Blue (-) Rail** on the right side.
+
+#### Connecting the Touch Sensor
+
+Plug the sensor into the 3.3V side:
+
+| Sensor Pin | Connect To | Function |
+| --- | --- | --- |
+| **VCC** | **Red Rail (Right)** (3.3V) | Power |
+| **GND** | **Blue Rail (Right)** (GND) | Ground |
+| **SIG** | `GPIO 17` (Pin 11) | Signal Output |
+
+**Test:** Run `python test_touch.py`. Touch the sensor pad — you should see "TOUCH DETECTED!" in the terminal. Press `Ctrl+C` to exit.
+
 ## Part III: The Core (Combined)
 
 Run `python totem_core.py` to synchronize both the Face and LCD.
