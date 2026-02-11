@@ -138,6 +138,14 @@ class TotemDaemon:
             now = time.time()
             if now - self._last_notify_time >= self._notify_cooldown:
                 self._last_notify_time = now
+
+                # Instant physical reaction -- respond before the agent even knows
+                with self._lock:
+                    if "face" in self._modules:
+                        self._modules["face"].handle_command("expression", {"name": "surprised"})
+                    if "lcd" in self._modules:
+                        self._modules["lcd"].handle_command("write", {"line1": "I felt that!", "line2": "Thinking...", "align": "center"})
+
                 thread = threading.Thread(
                     target=self._dispatch_openclaw_event,
                     args=(event,),
