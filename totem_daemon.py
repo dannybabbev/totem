@@ -24,9 +24,12 @@ Protocol:
 
 import json
 import os
+import shutil
 import signal
 import socket
+import subprocess
 import sys
+import time
 import threading
 import importlib
 import inspect
@@ -47,6 +50,12 @@ class TotemDaemon:
         self._server = None
         self._running = False
         self._lock = threading.Lock()
+
+        # Event system
+        self._events = []  # timestamped event log
+        self._events_lock = threading.Lock()
+        self._notify_enabled = os.environ.get("TOTEM_NOTIFY_ENABLED", "true").lower() != "false"
+        self._openclaw_bin = shutil.which("openclaw")
 
     # --- Module discovery and initialization --------------------------------
 
@@ -82,6 +91,8 @@ class TotemDaemon:
         for name, module in list(self._modules.items()):
             try:
                 module.init()
+                # Wire up event callback so sensor modules can emit events
+                module.set_event_callback(self._on_event)
                 print(f"  [OK] Initialized: {name}")
             except Exception as e:
                 print(f"  [FAIL] Could not init {name}: {e}")
@@ -95,6 +106,82 @@ class TotemDaemon:
                 print(f"  [OK] Cleaned up: {name}")
             except Exception as e:
                 print(f"  [WARN] Cleanup failed for {name}: {e}")
+
+    # --- Event system -------------------------------------------------------
+
+    def _on_event(self, module_name, event_type, data):
+        """
+        Called by hardware modules via _emit_event().
+        Stores the event and dispatches a notification to OpenClaw.
+        """
+        event = {
+            "module": module_name,
+            "event": event_type,
+            "data": data,
+            "timestamp": time.time(),
+            "timestamp_iso": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        }
+
+        # Store in event queue
+        with self._events_lock:
+            self._events.append(event)
+            # Keep at most 100 events to prevent unbounded growth
+            if len(self._events) > 100:
+                self._events = self._events[-100:]
+
+        print(f"  [EVENT] {module_name}: {event_type} {data}")
+
+        # Dispatch to OpenClaw in a background thread
+        if self._notify_enabled and self._openclaw_bin:
+            thread = threading.Thread(
+                target=self._dispatch_openclaw_event,
+                args=(event,),
+                daemon=True,
+            )
+            thread.start()
+
+    def _dispatch_openclaw_event(self, event):
+        """
+        Notify OpenClaw by running: openclaw system event --text "..." --mode now
+        Runs in a background thread so it never blocks GPIO callbacks.
+        """
+        module = event["module"]
+        event_type = event["event"]
+        data = event["data"]
+        ts = event["timestamp_iso"]
+
+        # Build a descriptive text for the agent
+        parts = [f"{module} sensor: {event_type} at {ts}."]
+        if "touch_count" in data:
+            parts.append(f"Touch count: {data['touch_count']}.")
+        if "duration_ms" in data:
+            parts.append(f"Duration: {data['duration_ms']}ms.")
+        parts.append(
+            "React to this physically -- use totem_ctl to show a reaction "
+            "on the face and LCD."
+        )
+        text = " ".join(parts)
+
+        try:
+            subprocess.run(
+                [self._openclaw_bin, "system", "event", "--text", text, "--mode", "now"],
+                timeout=10,
+                capture_output=True,
+            )
+        except FileNotFoundError:
+            print("  [WARN] openclaw binary not found, cannot dispatch event")
+        except subprocess.TimeoutExpired:
+            print("  [WARN] openclaw system event timed out")
+        except Exception as e:
+            print(f"  [WARN] Failed to dispatch event to OpenClaw: {e}")
+
+    def _get_events(self, peek=False):
+        """Return pending events. If peek=False, clears the queue."""
+        with self._events_lock:
+            events = list(self._events)
+            if not peek:
+                self._events.clear()
+        return events
 
     # --- Command routing ----------------------------------------------------
 
@@ -166,6 +253,11 @@ class TotemDaemon:
                 except Exception as e:
                     caps[name] = {"error": str(e)}
             return {"ok": True, "data": caps}
+
+        if action == "events":
+            peek = params.get("peek", False)
+            events = self._get_events(peek=peek)
+            return {"ok": True, "data": {"events": events, "count": len(events)}}
 
         return {"ok": False, "error": f"Unknown system action '{action}'"}
 
@@ -239,9 +331,13 @@ class TotemDaemon:
         signal.signal(signal.SIGINT, self._handle_signal)
 
         modules_str = ", ".join(self._modules.keys()) if self._modules else "none"
+        notify_str = "enabled" if (self._notify_enabled and self._openclaw_bin) else "disabled"
+        if self._notify_enabled and not self._openclaw_bin:
+            notify_str = "disabled (openclaw binary not found)"
         print(f"\n  Daemon ready. Modules: [{modules_str}]")
         print(f"  PID: {os.getpid()}")
         print(f"  Socket: {SOCKET_PATH}")
+        print(f"  OpenClaw notify: {notify_str}")
         print("  Press Ctrl+C to stop.\n")
 
         # Main loop

@@ -380,7 +380,7 @@ Reference list for future development. Each module follows the same pattern abov
 | `hardware/microphone.py` | USB mic / ReSpeaker | USB / I2S | USB port | level, record, detect_speech |
 | `hardware/speaker.py` | 3.5mm / USB speaker | ALSA | Audio jack / USB | play, say (TTS), volume, stop |
 | `hardware/camera.py` | USB webcam | USB | USB port | capture, stream, detect_motion |
-| `hardware/touch.py` | Capacitive touch | GPIO | Input pin | read, on_touch (callback) |
+| `hardware/touch.py` | Capacitive touch (TTP223) | GPIO | Pin 17 | read, config, reset + emits events via `_emit_event()` |
 | `hardware/neopixel.py` | WS2812B LED strip | GPIO PWM | Pin 18* | color, rainbow, pulse, off |
 
 *Note: NeoPixel and Servo both use PWM. If using both, assign them to different PWM channels or use a PCA9685 PWM driver board over I2C.
@@ -427,3 +427,42 @@ down to 3.3V for the Pi's GPIO input.*
 6. **No changes to daemon or CLI.** The daemon auto-discovers modules. The CLI sends raw JSON via `--json` mode for any module. You only need to add argparse subcommands to `totem_ctl.py` if you want named CLI shortcuts (optional but recommended).
 
 7. **Update the skill.** After adding a module, add its commands to `skills/totem/SKILL.md` so the OpenClaw agent knows about the new hardware.
+
+8. **Sensor event pattern (for modules that detect things).** Sensors like touch, distance, and microphone need to notify the AI agent when something happens (touched, speech detected, object nearby). Use the built-in event system:
+
+   **How it works:**
+   - Call `self._emit_event(event_type, data)` from your module when something is detected.
+   - The daemon receives the event via the callback set during init.
+   - The daemon runs `openclaw system event --text "..." --mode now` to inject a `System:` line into the agent's main conversation session and trigger an immediate heartbeat.
+   - The agent sees the event in context of the ongoing conversation and can react (e.g., change face expression, write to LCD, respond in chat).
+
+   **Example (from `hardware/touch.py`):**
+   ```python
+   def _on_touch(self, channel):
+       self._touch_count += 1
+       self._is_touched = True
+       self._last_touch_time = time.time()
+       self._emit_event("touched", {
+           "pin": self.TOUCH_PIN,
+           "touch_count": self._touch_count,
+           "timestamp": self._last_touch_time,
+       })
+   ```
+
+   **For a microphone module**, the same pattern applies:
+   ```python
+   # In hardware/microphone.py
+   def _on_speech_detected(self):
+       self._emit_event("speech_detected", {
+           "timestamp": time.time(),
+           "duration_ms": self._speech_duration,
+           "level": self._peak_level,
+       })
+   ```
+
+   **Key rules for sensor events:**
+   - Always debounce noisy sensors to avoid flooding the agent with events.
+   - Include a `timestamp` in every event payload.
+   - Use descriptive `event_type` strings: `"touched"`, `"released"`, `"speech_detected"`, `"object_nearby"`, `"temperature_alert"`.
+   - The `_emit_event()` call is non-blocking -- the daemon dispatches the notification in a background thread.
+   - Events are also stored in the daemon's internal event queue, accessible via `totem_ctl events`.

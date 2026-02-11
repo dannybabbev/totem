@@ -23,6 +23,7 @@ Run `totem_ctl capabilities` to dynamically discover all available hardware modu
 |-----------|---------|------------|-----------|
 | **Face** (MAX7219) | 8x8 LED matrix | 64 pixels | SPI |
 | **LCD** (1602) | Character display | 16 cols x 2 rows | I2C |
+| **Touch** (TTP223) | Capacitive sensor | Binary (touched/released) | GPIO 17 |
 
 ---
 
@@ -168,6 +169,37 @@ totem_ctl lcd raw_write 0x41           # Write 'A' directly
 
 ---
 
+## Quick Reference: Touch Sensor
+
+The touch sensor detects physical contact. When someone touches it, a `System:` event is injected into your conversation automatically -- you will see it appear as a system line. You can also query the sensor state directly.
+
+### Reading State
+```bash
+totem_ctl touch read                   # Current state (is_touched, count, last time)
+totem_ctl touch reset                  # Reset touch counter to zero
+totem_ctl touch config --debounce 300  # Set debounce time in ms (50-2000)
+```
+
+### Hardware Events (automatic)
+
+Touch events are delivered to you automatically as `System:` lines in the conversation. You do **not** need to poll for them. When someone touches the sensor, you will see something like:
+
+> System: touch sensor: touched at 2026-02-10T15:30:00. Touch count: 5. React to this physically -- use totem_ctl to show a reaction on the face and LCD.
+
+When they release, you will see:
+
+> System: touch sensor: released at 2026-02-10T15:30:02. Duration: 2000ms.
+
+### Polling Events (manual)
+
+If you need to check for events programmatically:
+```bash
+totem_ctl events                       # Get and clear pending events (JSON)
+totem_ctl events --peek                # Read events without clearing
+```
+
+---
+
 ## Compound Commands
 
 ### Express (coordinated face + LCD)
@@ -213,6 +245,11 @@ totem_ctl --json '{"module":"face","action":"pixel","params":{"x":3,"y":4,"on":1
 - **When confused:** Use `express confused --message "Could you clarify?"`.
 - **When showing an error:** Use `express sad` or `face expression cross`.
 - **When showing success:** Use `face expression check` or `express happy`.
+- **When touched:** React physically and warmly. You have a body and someone just touched you. Show a surprised or happy expression, write an acknowledgment on the LCD. Vary your reactions -- don't always do the same thing. Examples:
+  - `express surprised --message "I felt that!"`
+  - `express happy --message "Hey there!"`
+  - If touched repeatedly: `express happy --message "That tickles!"`
+  - On release after a long touch: acknowledge the duration, e.g. "That was a nice long pat."
 - **Be creative!** Design custom faces, icons, and animations. The hardware is your canvas.
 - **Use batch commands** when you need to update face and LCD simultaneously for coordinated reactions.
 - **Use `totem_ctl status`** to check current hardware state before making changes.

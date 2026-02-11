@@ -38,7 +38,7 @@ Note: If using Pi 4B, use the CSI port between the HDMI and Audio jack.
 * [ ] **Audio:** USB Microphone + Speaker (`hardware/microphone.py`, `hardware/speaker.py`).
 * [ ] **Camera:** USB Webcam for vision (`hardware/camera.py`).
 * [ ] **Sensors:** HC-SR04 distance, DHT11 temperature (`hardware/distance.py`, `hardware/temperature.py`).
-* [ ] **Touch:** Capacitive touch sensor (`hardware/touch.py`).
+* [x] **Touch:** Capacitive touch sensor (`hardware/touch.py`) — with real-time event notifications to OpenClaw.
 * [ ] **Lighting:** WS2812B NeoPixel LED strip (`hardware/neopixel.py`).
 
 ---
@@ -266,6 +266,7 @@ totem_daemon.py (background service)
 hardware/ package
     ├── face.py    → MAX7219 LED Matrix (SPI)
     ├── lcd.py     → 1602 LCD Display (I2C)
+    ├── touch.py   → TTP223 Touch Sensor (GPIO) ← emits events → OpenClaw
     └── (future)   → servo.py, mic.py, distance.py, ...
 ```
 
@@ -275,9 +276,10 @@ hardware/ package
 totem/
 ├── hardware/                  # Modular hardware abstraction layer
 │   ├── __init__.py
-│   ├── base.py                # HardwareModule abstract base class
+│   ├── base.py                # HardwareModule abstract base class (+ event system)
 │   ├── face.py                # MAX7219 face (expressions, drawing, animations)
-│   └── lcd.py                 # 1602 LCD (text, custom chars, full HD44780 API)
+│   ├── lcd.py                 # 1602 LCD (text, custom chars, full HD44780 API)
+│   └── touch.py               # TTP223 touch sensor (events → OpenClaw)
 ├── expressions.py             # Face bitmap library (all 8x8 grids)
 ├── totem_daemon.py            # Background daemon (Unix socket server)
 ├── totem_ctl.py               # CLI client (sends JSON commands to daemon)
@@ -286,6 +288,7 @@ totem/
 │       └── SKILL.md           # OpenClaw skill definition
 ├── face.py                    # Original face test script
 ├── lcd_test.py                # Original LCD test script
+├── test_touch.py              # Touch sensor standalone test script
 ├── totem_core.py              # Original combined demo script
 ├── requirements.txt           # Python dependencies
 ├── CONTRIBUTING.md            # Guide for adding new hardware modules

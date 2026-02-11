@@ -207,6 +207,18 @@ def build_lcd_command(args):
     return {"module": "lcd", "action": action, "params": params}
 
 
+def build_touch_command(args):
+    """Build a touch module command from CLI args."""
+    action = args.touch_action
+    params = {}
+
+    if action == "config":
+        if args.debounce is not None:
+            params["debounce_ms"] = args.debounce
+
+    return {"module": "touch", "action": action, "params": params}
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="totem_ctl",
@@ -221,6 +233,10 @@ def main():
     sub_ping = subparsers.add_parser("ping", help="Check if daemon is alive")
     sub_status = subparsers.add_parser("status", help="Get state of all hardware")
     sub_caps = subparsers.add_parser("capabilities", help="List all modules and actions")
+
+    # --- Events ---
+    sub_events = subparsers.add_parser("events", help="Poll pending hardware events")
+    sub_events.add_argument("--peek", action="store_true", help="Read events without clearing")
 
     # --- Express (compound) ---
     sub_express = subparsers.add_parser("express", help="Coordinated face + LCD emotion")
@@ -376,6 +392,20 @@ def main():
     # lcd stop_scroll
     lcd_sub.add_parser("stop_scroll", help="Stop scrolling text")
 
+    # --- Touch ---
+    sub_touch = subparsers.add_parser("touch", help="Touch sensor control")
+    touch_sub = sub_touch.add_subparsers(dest="touch_action", help="Touch action")
+
+    # touch read
+    touch_sub.add_parser("read", help="Read current touch sensor state")
+
+    # touch config [--debounce N]
+    tp = touch_sub.add_parser("config", help="Configure touch sensor")
+    tp.add_argument("--debounce", type=int, default=None, help="Debounce time in ms (50-2000)")
+
+    # touch reset
+    touch_sub.add_parser("reset", help="Reset touch counter to zero")
+
     # --- Parse and execute ---
     args = parser.parse_args()
 
@@ -398,6 +428,12 @@ def main():
         print_response(response)
     elif args.command == "capabilities":
         response = send_command({"action": "capabilities"})
+        print_response(response)
+    elif args.command == "events":
+        params = {}
+        if args.peek:
+            params["peek"] = True
+        response = send_command({"action": "events", "params": params})
         print_response(response)
     elif args.command == "express":
         cmd = {
@@ -427,6 +463,13 @@ def main():
             sub_lcd.print_help()
             return
         cmd = build_lcd_command(args)
+        response = send_command(cmd)
+        print_response(response)
+    elif args.command == "touch":
+        if not args.touch_action:
+            sub_touch.print_help()
+            return
+        cmd = build_touch_command(args)
         response = send_command(cmd)
         print_response(response)
     else:

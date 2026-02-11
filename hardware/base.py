@@ -106,6 +106,33 @@ class HardwareModule(ABC):
         """
         ...
 
+    # --- Event emission (for sensor modules) --------------------------------
+
+    def set_event_callback(self, callback):
+        """
+        Set the callback for event emission.
+        Called by the daemon after init to wire up the event system.
+
+        Args:
+            callback: function(module_name: str, event_type: str, data: dict)
+        """
+        self._event_callback = callback
+
+    def _emit_event(self, event_type, data=None):
+        """
+        Emit a hardware event (e.g. touch detected, speech detected).
+        The daemon receives this and can notify OpenClaw or store it.
+
+        Args:
+            event_type: Short descriptive string (e.g. "touched", "released").
+            data: Optional dict with event-specific payload.
+        """
+        cb = getattr(self, "_event_callback", None)
+        if cb:
+            cb(self.name, event_type, data or {})
+
+    # --- Response helpers ---------------------------------------------------
+
     def _ok(self, data=None):
         """Helper: build a success response."""
         result = {"ok": True}
