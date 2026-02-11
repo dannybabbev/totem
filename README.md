@@ -94,7 +94,7 @@ Run these commands to fix common library issues before they happen.
 
 ```bash
 sudo apt-get update && sudo apt-get upgrade -y
-sudo apt-get install -y python3-pip python3-venv python3-dev libjpeg-dev zlib1g-dev libfreetype6-dev liblcms2-dev libopenjp2-7-dev libtiff5-dev i2c-tools
+sudo apt-get install -y python3-pip python3-venv python3-dev libjpeg-dev zlib1g-dev libfreetype6-dev liblcms2-dev libopenjp2-7-dev libtiff5-dev i2c-tools swig lgpio
 
 ```
 
@@ -242,6 +242,8 @@ Plug the sensor into the 3.3V side:
 | **VCC** | **Red Rail (Right)** (3.3V) | Power |
 | **GND** | **Blue Rail (Right)** (GND) | Ground |
 | **SIG** | `GPIO 17` (Pin 11) | Signal Output |
+
+**Note:** The touch sensor uses GPIO edge detection, which requires `rpi-lgpio` (installed via `requirements.txt`). The older `RPi.GPIO` package fails on newer Pi OS (Bookworm/Trixie) without root. If you see "Failed to add edge detection" errors, make sure you installed `rpi-lgpio` and the system dependencies (`swig`, `lgpio`) from Part I.
 
 **Test:** Run `python test_touch.py`. Touch the sensor pad — you should see "TOUCH DETECTED!" in the terminal. Press `Ctrl+C` to exit.
 
