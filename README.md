@@ -308,6 +308,19 @@ bash install-service.sh
 
 The daemon discovers all hardware modules in `hardware/`, initializes them, and listens for commands on `/tmp/totem.sock`.
 
+**Important:** The systemd service runs with a minimal `PATH` that does not include nvm/Node.js. If you installed OpenClaw via npm, you need to add the Node.js bin directory to the service so the daemon can find the `openclaw` binary (needed for touch/sensor event notifications). Add this line to the `[Service]` section of `~/.config/systemd/user/totem-daemon.service`:
+
+```ini
+Environment=PATH=/home/<user>/.nvm/versions/node/v24/bin:/usr/local/bin:/usr/bin:/bin
+```
+
+Replace `<user>` with your username and adjust the Node.js version path if needed (check with `which openclaw`). Then reload and restart:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user restart totem-daemon.service
+```
+
 ### Managing the Daemon
 
 ```bash
