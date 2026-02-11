@@ -133,8 +133,8 @@ class TotemDaemon:
 
         print(f"  [EVENT] {module_name}: {event_type} {data}")
 
-        # Dispatch to OpenClaw in a background thread (touched events only, with cooldown)
-        if self._notify_enabled and self._openclaw_bin and event_type == "touched":
+        # Instant physical reaction + OpenClaw dispatch (touched events only, with cooldown)
+        if event_type == "touched":
             now = time.time()
             if now - self._last_notify_time >= self._notify_cooldown:
                 self._last_notify_time = now
@@ -146,14 +146,16 @@ class TotemDaemon:
                     if "lcd" in self._modules:
                         self._modules["lcd"].handle_command("write", {"line1": "I felt that!", "line2": "Thinking...", "align": "center"})
 
-                thread = threading.Thread(
-                    target=self._dispatch_openclaw_event,
-                    args=(event,),
-                    daemon=True,
-                )
-                thread.start()
+                # Dispatch to OpenClaw in a background thread
+                if self._notify_enabled and self._openclaw_bin:
+                    thread = threading.Thread(
+                        target=self._dispatch_openclaw_event,
+                        args=(event,),
+                        daemon=True,
+                    )
+                    thread.start()
             else:
-                print(f"  [SKIP] OpenClaw notify cooldown ({self._notify_cooldown}s)")
+                print(f"  [SKIP] Touch cooldown ({self._notify_cooldown}s)")
 
     def _dispatch_openclaw_event(self, event):
         """
