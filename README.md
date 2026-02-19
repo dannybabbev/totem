@@ -94,7 +94,7 @@ Run these commands to fix common library issues before they happen.
 
 ```bash
 sudo apt-get update && sudo apt-get upgrade -y
-sudo apt-get install -y python3-pip python3-venv python3-dev libjpeg-dev zlib1g-dev libfreetype6-dev liblcms2-dev libopenjp2-7-dev libtiff5-dev i2c-tools swig
+sudo apt-get install -y python3-pip python3-venv python3-dev libjpeg-dev zlib1g-dev libfreetype6-dev liblcms2-dev libopenjp2-7-dev libtiff5-dev i2c-tools swig liblgpio-dev
 
 ```
 
