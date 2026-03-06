@@ -348,7 +348,7 @@ class FaceModule(HardwareModule):
         y = int(params.get("y", 0))
         on = int(params.get("on", 1))
         flush = params.get("flush", True)
-        self._buffer.putpixel((x, y), 255 if on else 0)
+        self._buffer.putpixel((x, y), 1 if on else 0)
         if flush:
             self._flush()
         return self._ok({"x": x, "y": y, "on": on})
@@ -356,7 +356,7 @@ class FaceModule(HardwareModule):
     def _cmd_line(self, params):
         coords = (int(params["x1"]), int(params["y1"]), int(params["x2"]), int(params["y2"]))
         flush = params.get("flush", True)
-        self._draw.line(coords, fill="white")
+        self._draw.line(coords, fill=1)
         if flush:
             self._flush()
         return self._ok()
@@ -366,9 +366,9 @@ class FaceModule(HardwareModule):
         fill_it = params.get("fill", False)
         flush = params.get("flush", True)
         if fill_it:
-            self._draw.rectangle(coords, outline="white", fill="white")
+            self._draw.rectangle(coords, outline=1, fill=1)
         else:
-            self._draw.rectangle(coords, outline="white", fill="black")
+            self._draw.rectangle(coords, outline=1, fill=0)
         if flush:
             self._flush()
         return self._ok()
@@ -378,9 +378,9 @@ class FaceModule(HardwareModule):
         fill_it = params.get("fill", False)
         flush = params.get("flush", True)
         if fill_it:
-            self._draw.ellipse(coords, outline="white", fill="white")
+            self._draw.ellipse(coords, outline=1, fill=1)
         else:
-            self._draw.ellipse(coords, outline="white", fill="black")
+            self._draw.ellipse(coords, outline=1, fill=0)
         if flush:
             self._flush()
         return self._ok()
@@ -391,14 +391,14 @@ class FaceModule(HardwareModule):
         char = str(params.get("char", ""))[:1]
         flush = params.get("flush", True)
         # Use default tiny font
-        self._draw.text((x, y), char, fill="white")
+        self._draw.text((x, y), char, fill=1)
         if flush:
             self._flush()
         return self._ok()
 
     def _cmd_clear(self, params):
         flush = params.get("flush", True)
-        self._draw.rectangle((0, 0, 7, 7), fill="black")
+        self._draw.rectangle((0, 0, 7, 7), fill=0)
         if flush:
             self._flush()
         self._current_expression = None
@@ -409,7 +409,7 @@ class FaceModule(HardwareModule):
         for y in range(8):
             for x in range(8):
                 val = self._buffer.getpixel((x, y))
-                self._buffer.putpixel((x, y), 0 if val else 255)
+                self._buffer.putpixel((x, y), 0 if val else 1)
         if flush:
             self._flush()
         return self._ok()
@@ -446,7 +446,7 @@ class FaceModule(HardwareModule):
         """Draw an 8x8 grid into the internal buffer."""
         for y, row in enumerate(grid):
             for x, pixel in enumerate(row):
-                self._buffer.putpixel((x, y), 255 if pixel else 0)
+                self._buffer.putpixel((x, y), 1 if pixel else 0)
 
     def _flush(self):
         """Send the internal buffer to the physical device."""
@@ -475,9 +475,9 @@ class FaceModule(HardwareModule):
             for lines in frames:
                 if self._anim_stop.is_set():
                     break
-                self._draw.rectangle((0, 0, 7, 7), fill="black")
+                self._draw.rectangle((0, 0, 7, 7), fill=0)
                 for line in lines:
-                    self._draw.line(line, fill="white")
+                    self._draw.line(line, fill=1)
                 self._flush()
                 self._anim_stop.wait(0.1)
 
@@ -502,18 +502,18 @@ class FaceModule(HardwareModule):
             for size in range(1, 4):
                 if self._anim_stop.is_set():
                     break
-                self._draw.rectangle((0, 0, 7, 7), fill="black")
+                self._draw.rectangle((0, 0, 7, 7), fill=0)
                 cx, cy = 3, 3
-                self._draw.ellipse((cx - size, cy - size, cx + size + 1, cy + size + 1), outline="white")
+                self._draw.ellipse((cx - size, cy - size, cx + size + 1, cy + size + 1), outline=1)
                 self._flush()
                 self._anim_stop.wait(0.15)
             # Dots contract
             for size in range(3, 0, -1):
                 if self._anim_stop.is_set():
                     break
-                self._draw.rectangle((0, 0, 7, 7), fill="black")
+                self._draw.rectangle((0, 0, 7, 7), fill=0)
                 cx, cy = 3, 3
-                self._draw.ellipse((cx - size, cy - size, cx + size + 1, cy + size + 1), outline="white")
+                self._draw.ellipse((cx - size, cy - size, cx + size + 1, cy + size + 1), outline=1)
                 self._flush()
                 self._anim_stop.wait(0.15)
 
@@ -525,8 +525,8 @@ class FaceModule(HardwareModule):
             for x, y in z_positions:
                 if self._anim_stop.is_set():
                     break
-                self._draw.rectangle((0, 0, 7, 7), fill="black")
-                self._draw.text((x, y), "z", fill="white")
+                self._draw.rectangle((0, 0, 7, 7), fill=0)
+                self._draw.text((x, y), "z", fill=1)
                 self._flush()
                 self._anim_stop.wait(0.4)
 
