@@ -394,18 +394,31 @@ Run the installer on the Raspberry Pi:
 curl -fsSL https://openclaw.ai/install.sh | bash
 ```
 
-Follow the on-screen prompts. When asked for your API key, paste the key you generated above.
+### 3. Run the Onboarding Wizard
 
-During onboarding, you will be asked to connect a chat channel. **Telegram is the easiest option** — here's how to set it up:
+After installation, run the onboarding wizard to configure OpenClaw and install it as a background service:
 
-1. Open Telegram and search for **@BotFather**.
-2. Send `/newbot` and follow the prompts to name your bot.
-3. BotFather will give you a **Bot Token** — copy it.
-4. Paste the token when the onboarding wizard asks for your Telegram connection.
+```bash
+openclaw onboard --install-daemon
+```
 
-This will configure your API provider, connect your Telegram bot, and install the background service.
+The wizard will walk you through the following steps:
 
-### 3. Configure OpenClaw for Totem
+1. **Model/Auth:** Select your LLM provider (Anthropic recommended) and paste the API key you generated above. Pick a default model — choose the strongest available model since this agent will run tools.
+2. **Workspace:** Accept the default workspace location (`~/.openclaw/workspace`) or choose a custom path. Bootstrap files will be created automatically.
+3. **Gateway:** Configure the gateway port and authentication. The defaults (port `18789`, auto-generated token) work fine.
+4. **Channels:** Connect a chat platform. **Telegram is the easiest option:**
+   1. Open Telegram and search for **@BotFather**.
+   2. Send `/newbot` and follow the prompts to name your bot.
+   3. BotFather will give you a **Bot Token** — copy it.
+   4. Paste the token when the wizard asks for your Telegram connection.
+5. **Daemon:** The wizard installs OpenClaw as a systemd user service so it runs automatically on boot.
+6. **Health Check:** The wizard starts the Gateway and verifies it's working.
+7. **Skills:** Install any recommended skills (the Totem skill is added separately in Part VI).
+
+> **Tip:** If you need to reconfigure later, run `openclaw configure`. To add another chat channel, run `openclaw agents add <name>`.
+
+### 4. Configure OpenClaw for Totem
 
 Set the tools profile and permissions so OpenClaw can control hardware:
 
