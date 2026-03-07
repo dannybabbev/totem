@@ -405,6 +405,22 @@ During onboarding, you will be asked to connect a chat channel. **Telegram is th
 
 This will configure your API provider, connect your Telegram bot, and install the background service.
 
+### 3. Configure OpenClaw for Totem
+
+Set the tools profile and permissions so OpenClaw can control hardware:
+
+```bash
+openclaw config set tools.profile "coding"
+
+openclaw config set tools.allow '["read", "exec"]'
+```
+
+Restart the gateway for the changes to take effect:
+
+```bash
+openclaw gateway restart
+```
+
 ---
 
 ## Part VI: Add the Totem Skill to OpenClaw
