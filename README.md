@@ -513,13 +513,163 @@ The agent writes daily logs automatically and promotes important memories to `ME
 
 ---
 
-## Part VIII: Voice Assistant
+## Part VIII: Voice Mode Setup
 
-Give Totem ears and a voice. The voice assistant listens for the wake word "Hey Totem", records your speech, transcribes it, gets an AI response from OpenClaw, and speaks it back through the speaker.
+Totem has two operating modes that are **mutually exclusive**:
 
-### 1. Enable the OpenClaw Chat API
+- **Body Mode:** T-Cobbler + breadboard with LED face, LCD, and touch sensor.
+- **Voice Mode:** ReSpeaker 2-Mics Pi HAT plugged directly onto the Pi's GPIO header for audio input/output.
 
-The voice assistant needs the OpenClaw gateway's OpenAI-compatible endpoint to get AI responses:
+The HAT cannot be reliably wired via jumper cables to the breadboard due to insufficient power delivery over manual wiring (the WM8960 codec fails to initialize). The HAT must be connected directly to the Pi's 40-pin header, which means the T-Cobbler must be disconnected.
+
+### Hardware
+
+- **Seeed Studio ReSpeaker 2-Mics Pi HAT** (WM8960 codec, 2x MEMS microphones, 3.5mm audio jack, JST speaker out)
+- **3.5mm aux cable** or **JST 2.0 speaker** for audio output
+
+### Switching Modes
+
+1. **Shut down the Pi:** `sudo shutdown now`
+2. Wait for the green LED to stop blinking.
+3. **Disconnect** the T-Cobbler ribbon cable from the Pi's GPIO header.
+4. **Plug the ReSpeaker HAT** directly onto the Pi's 40-pin header. Align the pins carefully — the square solder pad on the HAT (Pin 1 / 3.3V) must match Pin 1 on the Pi.
+5. Connect a speaker or headphones to the HAT's 3.5mm jack.
+6. Power on the Pi.
+
+To switch back to Body Mode, reverse the process: shut down, remove HAT, reconnect T-Cobbler.
+
+### Driver Installation
+
+The official `respeaker/seeed-voicecard` driver does **not** support Debian 13 (Trixie) with kernel 6.12. Use the community fork by HinTak which has branches for newer kernels.
+
+#### 1. Install the driver
+
+```bash
+cd ~
+git clone -b v6.12 https://github.com/HinTak/seeed-voicecard
+cd seeed-voicecard
+sudo ./install.sh
+sudo reboot
+```
+
+> **Note:** Match the branch to your kernel version. Check with `uname -r`. If your kernel is `6.12.x`, use `-b v6.12`. For other versions, use the matching `vX.Y` branch.
+
+#### 2. Fix config.txt conflicts
+
+The installer adds overlays to `/boot/firmware/config.txt`. Check for conflicts:
+
+```bash
+cat /boot/firmware/config.txt
+```
+
+**Remove these lines if present** (they conflict with I2S audio):
+
+```
+dtoverlay=audremap,pins_18_19
+audio_pwm_mode=2
+```
+
+The `[all]` section at the bottom should contain:
+
+```
+[all]
+enable_uart=1
+
+dtoverlay=respeaker-2mic-v1_0
+dtoverlay=i2s-mmap
+dtparam=i2s=on
+```
+
+Also ensure these are set earlier in the file:
+
+```
+dtparam=i2c_arm=on
+dtparam=spi=on
+dtparam=audio=on
+```
+
+After editing, reboot:
+
+```bash
+sudo reboot
+```
+
+### Testing the Audio Hardware
+
+#### 1. Check the driver loaded
+
+```bash
+dmesg | grep -i wm8960
+```
+
+**Good output:**
+```
+wm8960 1-001a: wm8960 codec registered
+```
+
+**Bad output (power/wiring issue):**
+```
+wm8960 1-001a: Failed to issue reset
+wm8960 1-001a: probe with driver wm8960 failed with error -5
+```
+
+If you see the error, the HAT is not making proper contact. Reseat it on the GPIO header and reboot.
+
+#### 2. Check I2C
+
+```bash
+sudo i2cdetect -y 1
+```
+
+You should see address `1a` (WM8960 codec). If you also have the LCD connected via I2C (Body Mode), you would see `27` as well — but in Voice Mode the LCD is not connected.
+
+#### 3. Check the sound card
+
+```bash
+arecord -l
+```
+
+Expected output (card number may vary):
+
+```
+card 2: seeed2micvoicec [seeed2micvoicec], device 0: bcm2835-i2s-wm8960-hifi wm8960-hifi-0
+```
+
+Note the **card number** (e.g. `2`). The voice assistant detects this automatically by scanning for "seeed" in the ALSA card list.
+
+#### 4. Set headphone volume
+
+The 3.5mm jack uses the headphone output, which defaults to 0:
+
+```bash
+amixer -c 2 sset 'Headphone' 120
+```
+
+Replace `2` with your card number from `arecord -l`.
+
+#### 5. Record a test clip
+
+```bash
+arecord -D plughw:2,0 -f cd -d 5 test.wav
+```
+
+Speak into the microphone for 5 seconds. Replace `2` with your card number.
+
+#### 6. Play it back
+
+```bash
+aplay -D plughw:2,0 test.wav
+```
+
+You should hear your voice through the speaker/headphones connected to the 3.5mm jack.
+
+### Voice Assistant Setup
+
+Once audio hardware is working, set up the voice assistant.
+
+#### 1. Enable the OpenClaw Chat API
+
+The voice assistant needs the gateway's OpenAI-compatible endpoint to get AI responses synchronously:
 
 ```bash
 openclaw config set gateway.http.endpoints.chatCompletions.enabled true
@@ -532,7 +682,7 @@ Note your gateway auth token (you'll need it for `.env`):
 openclaw config get gateway.auth.token
 ```
 
-### 2. Download the Vosk Speech Model
+#### 2. Download the Vosk speech model
 
 Vosk runs offline on the Pi for wake word detection (~40MB model):
 
@@ -541,23 +691,23 @@ cd ~ && wget https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
 unzip vosk-model-small-en-us-0.15.zip && rm vosk-model-small-en-us-0.15.zip
 ```
 
-### 3. Install Python Dependencies
+#### 3. Install Python dependencies
 
 ```bash
 cd ~/totem && source env/bin/activate
 pip install -r requirements.txt
 ```
 
-### 4. Configure Environment
+#### 4. Configure environment
 
 ```bash
 cp .env.example .env
 nano .env
 ```
 
-Fill in your **ElevenLabs API key** (from [elevenlabs.io](https://elevenlabs.io)) and **OpenClaw gateway token**.
+Fill in your **ElevenLabs API key** (from [elevenlabs.io](https://elevenlabs.io)) and **OpenClaw gateway token** from step 1.
 
-### 5. Run the Voice Assistant
+#### 5. Run
 
 **Manual (foreground):**
 ```bash
@@ -578,12 +728,26 @@ journalctl --user -u totem-voice.service -f
 ### How It Works
 
 1. **Passive listening** — Vosk runs locally, processing audio from the ReSpeaker HAT microphone. No cloud calls during this phase.
-2. **Wake word detected** — Face shows listening animation, LCD shows "I'm listening!"
+2. **Wake word detected** ("Hey Totem") — Face shows listening animation, LCD shows "I'm listening!"
 3. **Records speech** — Stops on 1.5 seconds of silence (or 30s max)
-4. **Transcribes** — ElevenLabs Scribe API converts speech to text
-5. **AI response** — OpenClaw gateway processes the transcript and returns a response
-6. **Speaks** — ElevenLabs TTS converts the response to audio, played through the 3.5mm jack
+4. **Transcribes** — ElevenLabs Scribe API (via SDK) converts speech to text
+5. **AI response** — OpenClaw gateway `/v1/chat/completions` processes the transcript
+6. **Speaks** — ElevenLabs TTS API (via SDK) returns WAV audio directly, played through the 3.5mm jack via `aplay`
 7. **Returns to listening** for the next wake word
+
+### Voice Mode Troubleshooting
+
+| Problem | Cause | Fix |
+|---------|-------|-----|
+| `Failed to issue reset` in dmesg | HAT not seated properly or wrong config.txt | Reseat HAT, remove `audremap` overlay, reboot |
+| `arecord -l` shows nothing | Driver not installed for your kernel | Check `uname -r` and use matching HinTak branch |
+| No sound on playback | Headphone volume at 0 | `amixer -c 2 sset 'Headphone' 120` |
+| `audio open error: No such file or directory` | Wrong card number | Check `arecord -l` for correct card number |
+| `Unable to locate package raspberrypi-kernel-headers` | Using official seeed repo on Trixie | Switch to HinTak fork with `v6.12` branch |
+| `ELEVENLABS_API_KEY not set` | Missing `.env` file | `cp .env.example .env` and fill in keys |
+| `OPENCLAW_GATEWAY_TOKEN not set` | Missing gateway token | `openclaw config get gateway.auth.token` |
+| `Vosk model not found` | Model not downloaded | See step 2 above |
+| Wake word not detected | Mic volume too low or ambient noise | Try `amixer -c 2 sset 'Capture' 100` |
 
 ---
 
