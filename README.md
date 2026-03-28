@@ -513,6 +513,80 @@ The agent writes daily logs automatically and promotes important memories to `ME
 
 ---
 
+## Part VIII: Voice Assistant
+
+Give Totem ears and a voice. The voice assistant listens for the wake word "Hey Totem", records your speech, transcribes it, gets an AI response from OpenClaw, and speaks it back through the speaker.
+
+### 1. Enable the OpenClaw Chat API
+
+The voice assistant needs the OpenClaw gateway's OpenAI-compatible endpoint to get AI responses:
+
+```bash
+openclaw config set gateway.http.endpoints.chatCompletions.enabled true
+openclaw gateway restart
+```
+
+Note your gateway auth token (you'll need it for `.env`):
+
+```bash
+openclaw config get gateway.auth.token
+```
+
+### 2. Download the Vosk Speech Model
+
+Vosk runs offline on the Pi for wake word detection (~40MB model):
+
+```bash
+cd ~ && wget https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
+unzip vosk-model-small-en-us-0.15.zip && rm vosk-model-small-en-us-0.15.zip
+```
+
+### 3. Install Python Dependencies
+
+```bash
+cd ~/totem && source env/bin/activate
+pip install -r requirements.txt
+```
+
+### 4. Configure Environment
+
+```bash
+cp .env.example .env
+nano .env
+```
+
+Fill in your **ElevenLabs API key** (from [elevenlabs.io](https://elevenlabs.io)) and **OpenClaw gateway token**.
+
+### 5. Run the Voice Assistant
+
+**Manual (foreground):**
+```bash
+cd ~/totem && source env/bin/activate
+python voice.py
+```
+
+**As a systemd service (auto-starts on boot):**
+```bash
+cd ~/totem && bash install-voice-service.sh
+```
+
+Monitor logs:
+```bash
+journalctl --user -u totem-voice.service -f
+```
+
+### How It Works
+
+1. **Passive listening** — Vosk runs locally, processing audio from the ReSpeaker HAT microphone. No cloud calls during this phase.
+2. **Wake word detected** — Face shows listening animation, LCD shows "I'm listening!"
+3. **Records speech** — Stops on 1.5 seconds of silence (or 30s max)
+4. **Transcribes** — ElevenLabs Scribe API converts speech to text
+5. **AI response** — OpenClaw gateway processes the transcript and returns a response
+6. **Speaks** — ElevenLabs TTS converts the response to audio, played through the 3.5mm jack
+7. **Returns to listening** for the next wake word
+
+---
+
 ## Troubleshooting
 
 * **ModuleNotFoundError: No module named 'PIL'**:

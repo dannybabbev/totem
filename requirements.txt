@@ -15,3 +15,9 @@ spidev>=3.5
 
 # Image processing (required by luma)
 Pillow>=8.1.0
+
+# Voice assistant
+vosk>=0.3.45
+elevenlabs>=2.0.0
+requests>=2.28.0
+python-dotenv>=1.0.0
