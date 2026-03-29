@@ -276,12 +276,19 @@ class VoiceAssistant:
                 text=text,
                 voice_id=self._voice_id,
                 model_id="eleven_flash_v2_5",
-                output_format="wav_44100",
+                output_format="mp3_44100_128",
             )
+            mp3_path = self._get_temp_path(".mp3")
             wav_path = self._get_temp_path(".wav")
-            with open(wav_path, "wb") as f:
+            with open(mp3_path, "wb") as f:
                 for chunk in audio:
                     f.write(chunk)
+            # Convert MP3 to WAV for aplay
+            subprocess.run(
+                ["ffmpeg", "-y", "-i", mp3_path, "-ar", "44100", "-ac", "1", wav_path],
+                capture_output=True, timeout=30,
+            )
+            self._cleanup_temp(mp3_path)
             return wav_path
         except Exception as e:
             print(f"[VOICE] TTS error: {e}", file=sys.stderr)
