@@ -2,8 +2,9 @@
 Temperature Module - DHT11 Temperature & Humidity Sensor
 ========================================================
 
-Reads temperature and humidity from a DHT11 sensor via GPIO.
-Supports one-shot reads and background monitoring with threshold alerts.
+Continuously polls the DHT11 sensor in a background thread, caching
+the latest reading. Commands never block on hardware — they return
+the cached value instantly.
 
 Hardware: DHT11 3-pin breakout board (built-in pull-up resistor)
 Wiring:   +->3.3V, out->GPIO4, -->GND
@@ -38,24 +39,28 @@ class TemperatureModule(HardwareModule):
 
         self._sensor = adafruit_dht.DHT11(board.D4)
 
-        # Latest readings
+        # Latest readings (updated by background thread)
         self._temperature_c = None
         self._humidity = None
         self._last_read_time = None
 
-        # Watch mode
-        self._watching = False
-        self._watch_thread = None
-        self._stop_event = threading.Event()
-        self._interval = self.DEFAULT_INTERVAL
+        # Threshold alerts
         self._thresholds = {}
-        self._lock = threading.Lock()
-
-        # Track which thresholds have been crossed (to emit only on transition)
         self._alert_state = {}
 
+        # Background polling (always running)
+        self._interval = self.DEFAULT_INTERVAL
+        self._stop_event = threading.Event()
+        self._lock = threading.Lock()
+        self._poll_thread = threading.Thread(
+            target=self._poll_loop, daemon=True
+        )
+        self._poll_thread.start()
+
     def cleanup(self):
-        self._stop_watching()
+        self._stop_event.set()
+        if self._poll_thread and self._poll_thread.is_alive():
+            self._poll_thread.join(timeout=5)
         try:
             self._sensor.exit()
         except Exception:
@@ -71,7 +76,6 @@ class TemperatureModule(HardwareModule):
             "humidity": self._humidity,
             "last_read_time": self._last_read_time,
             "pin": self.DATA_PIN,
-            "watching": self._watching,
             "interval": self._interval,
             "thresholds": self._thresholds,
         }
@@ -80,7 +84,7 @@ class TemperatureModule(HardwareModule):
         return [
             {
                 "action": "read",
-                "description": "Read current temperature and humidity",
+                "description": "Read current temperature and humidity (returns cached value, never blocks)",
                 "params": {
                     "unit": {
                         "type": "str",
@@ -93,7 +97,7 @@ class TemperatureModule(HardwareModule):
             },
             {
                 "action": "watch",
-                "description": "Start background monitoring with optional threshold alerts",
+                "description": "Set threshold alerts (events fire when values cross thresholds)",
                 "params": {
                     "temp_min": {
                         "type": "float",
@@ -115,18 +119,11 @@ class TemperatureModule(HardwareModule):
                         "required": False,
                         "description": "Alert when humidity rises above this (%)",
                     },
-                    "interval": {
-                        "type": "float",
-                        "required": False,
-                        "description": "Polling interval in seconds (minimum 2)",
-                        "default": self.DEFAULT_INTERVAL,
-                        "min": self.MIN_READ_INTERVAL,
-                    },
                 },
             },
             {
                 "action": "stop",
-                "description": "Stop background monitoring",
+                "description": "Clear all threshold alerts",
                 "params": {},
             },
             {
@@ -166,58 +163,41 @@ class TemperatureModule(HardwareModule):
         if unit not in ("C", "F"):
             return self._err(f"Invalid unit: {unit}. Use 'C' or 'F'.")
 
-        self._do_read()
+        with self._lock:
+            temp_c = self._temperature_c
+            humidity = self._humidity
+            last_read = self._last_read_time
 
-        if self._temperature_c is None:
-            return self._err("Failed to read sensor. Try again in a few seconds.")
+        if temp_c is None:
+            return self._err("No reading yet. Sensor is still warming up, try again shortly.")
 
-        temperature_f = round(self._temperature_c * 9.0 / 5.0 + 32.0, 1)
+        temperature_f = round(temp_c * 9.0 / 5.0 + 32.0, 1)
         data = {
-            "temperature_c": self._temperature_c,
+            "temperature_c": temp_c,
             "temperature_f": temperature_f,
-            "humidity": self._humidity,
+            "humidity": humidity,
             "unit": unit,
-            "timestamp": self._last_read_time,
+            "timestamp": last_read,
         }
         return self._ok(data)
 
     def _cmd_watch(self, params):
-        # Stop any existing watch
-        self._stop_watching()
-
-        # Set thresholds
         self._thresholds = {}
         for key in ("temp_min", "temp_max", "humidity_min", "humidity_max"):
             val = params.get(key)
             if val is not None:
                 self._thresholds[key] = float(val)
 
-        # Set interval
-        interval = params.get("interval")
-        if interval is not None:
-            self._interval = max(self.MIN_READ_INTERVAL, float(interval))
-
-        # Reset alert state
+        # Reset alert state so thresholds fire fresh
         self._alert_state = {}
 
-        # Start background thread
-        self._stop_event.clear()
-        self._watching = True
-        self._watch_thread = threading.Thread(
-            target=self._watch_loop, daemon=True
-        )
-        self._watch_thread.start()
-
-        return self._ok({
-            "watching": True,
-            "interval": self._interval,
-            "thresholds": self._thresholds,
-        })
+        return self._ok({"thresholds": self._thresholds})
 
     def _cmd_stop(self, _params):
-        was_watching = self._watching
-        self._stop_watching()
-        return self._ok({"watching": False, "was_watching": was_watching})
+        had_thresholds = bool(self._thresholds)
+        self._thresholds = {}
+        self._alert_state = {}
+        return self._ok({"cleared": had_thresholds})
 
     def _cmd_config(self, params):
         interval = params.get("interval")
@@ -225,33 +205,29 @@ class TemperatureModule(HardwareModule):
             self._interval = max(self.MIN_READ_INTERVAL, float(interval))
         return self._ok({"interval": self._interval})
 
-    # --- Sensor reading -----------------------------------------------------
+    # --- Background polling (always running) --------------------------------
 
-    def _do_read(self):
-        """Read the sensor, updating cached values. Retries once on failure."""
-        for attempt in range(2):
-            try:
-                temp = self._sensor.temperature
-                hum = self._sensor.humidity
-                if temp is not None and hum is not None:
-                    with self._lock:
-                        self._temperature_c = round(float(temp), 1)
-                        self._humidity = round(float(hum), 1)
-                        self._last_read_time = time.time()
-                    return True
-            except RuntimeError:
-                # DHT sensors intermittently fail — retry after short delay
-                time.sleep(self.MIN_READ_INTERVAL)
-        return False
-
-    # --- Background watch ---------------------------------------------------
-
-    def _watch_loop(self):
-        """Background polling loop. Reads sensor and checks thresholds."""
+    def _poll_loop(self):
+        """Continuously reads the sensor and checks thresholds."""
         while not self._stop_event.is_set():
-            if self._do_read():
+            self._do_read()
+            if self._thresholds:
                 self._check_thresholds()
             self._stop_event.wait(self._interval)
+
+    def _do_read(self):
+        """Read the sensor, updating cached values."""
+        try:
+            temp = self._sensor.temperature
+            hum = self._sensor.humidity
+            if temp is not None and hum is not None:
+                with self._lock:
+                    self._temperature_c = round(float(temp), 1)
+                    self._humidity = round(float(hum), 1)
+                    self._last_read_time = time.time()
+        except RuntimeError:
+            # DHT sensors intermittently fail — skip this cycle
+            pass
 
     def _check_thresholds(self):
         """Emit events when thresholds are crossed (only on transition)."""
@@ -320,12 +296,3 @@ class TemperatureModule(HardwareModule):
                 })
             elif not crossed:
                 self._alert_state[key] = False
-
-    def _stop_watching(self):
-        """Stop the background watch thread cleanly."""
-        if self._watching:
-            self._stop_event.set()
-            if self._watch_thread and self._watch_thread.is_alive():
-                self._watch_thread.join(timeout=5)
-            self._watching = False
-            self._watch_thread = None

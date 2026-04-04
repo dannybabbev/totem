@@ -219,6 +219,30 @@ def build_touch_command(args):
     return {"module": "touch", "action": action, "params": params}
 
 
+def build_temperature_command(args):
+    """Build a temperature module command from CLI args."""
+    action = args.temperature_action
+    params = {}
+
+    if action == "read":
+        if args.unit is not None:
+            params["unit"] = args.unit
+    elif action == "watch":
+        if args.temp_min is not None:
+            params["temp_min"] = args.temp_min
+        if args.temp_max is not None:
+            params["temp_max"] = args.temp_max
+        if args.humidity_min is not None:
+            params["humidity_min"] = args.humidity_min
+        if args.humidity_max is not None:
+            params["humidity_max"] = args.humidity_max
+    elif action == "config":
+        if args.interval is not None:
+            params["interval"] = args.interval
+
+    return {"module": "temperature", "action": action, "params": params}
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="totem_ctl",
@@ -406,6 +430,28 @@ def main():
     # touch reset
     touch_sub.add_parser("reset", help="Reset touch counter to zero")
 
+    # --- Temperature ---
+    sub_temp = subparsers.add_parser("temperature", help="Temperature & humidity sensor")
+    temp_sub = sub_temp.add_subparsers(dest="temperature_action", help="Temperature action")
+
+    # temperature read [--unit C|F]
+    tp = temp_sub.add_parser("read", help="Read current temperature and humidity")
+    tp.add_argument("--unit", default=None, choices=["C", "F"], help="Temperature unit")
+
+    # temperature watch [--temp_min N] [--temp_max N] [--humidity_min N] [--humidity_max N]
+    tp = temp_sub.add_parser("watch", help="Set threshold alerts")
+    tp.add_argument("--temp_min", type=float, default=None, help="Alert below this temp (°C)")
+    tp.add_argument("--temp_max", type=float, default=None, help="Alert above this temp (°C)")
+    tp.add_argument("--humidity_min", type=float, default=None, help="Alert below this humidity (%%)")
+    tp.add_argument("--humidity_max", type=float, default=None, help="Alert above this humidity (%%)")
+
+    # temperature stop
+    temp_sub.add_parser("stop", help="Clear all threshold alerts")
+
+    # temperature config [--interval N]
+    tp = temp_sub.add_parser("config", help="Configure polling interval")
+    tp.add_argument("--interval", type=float, default=None, help="Polling interval in seconds (min 2)")
+
     # --- Parse and execute ---
     args = parser.parse_args()
 
@@ -470,6 +516,13 @@ def main():
             sub_touch.print_help()
             return
         cmd = build_touch_command(args)
+        response = send_command(cmd)
+        print_response(response)
+    elif args.command == "temperature":
+        if not args.temperature_action:
+            sub_temp.print_help()
+            return
+        cmd = build_temperature_command(args)
         response = send_command(cmd)
         print_response(response)
     else:
