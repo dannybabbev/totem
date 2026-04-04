@@ -94,7 +94,7 @@ Run these commands to fix common library issues before they happen.
 
 ```bash
 sudo apt-get update && sudo apt-get upgrade -y
-sudo apt-get install -y python3-pip python3-venv python3-dev libjpeg-dev zlib1g-dev libfreetype6-dev liblcms2-dev libopenjp2-7-dev libtiff5-dev i2c-tools swig liblgpio-dev
+sudo apt-get install -y python3-pip python3-venv python3-dev libjpeg-dev zlib1g-dev libfreetype6-dev liblcms2-dev libopenjp2-7-dev libtiff5-dev i2c-tools swig liblgpio-dev libgpiod2
 
 ```
 
@@ -246,6 +246,26 @@ Plug the sensor into the 3.3V side:
 **Note:** The touch sensor uses GPIO edge detection, which requires `rpi-lgpio` (installed via `requirements.txt`). The older `RPi.GPIO` package fails on newer Pi OS (Bookworm/Trixie) without root. If you see "Failed to add edge detection" errors, make sure you installed `rpi-lgpio` and the system dependencies (`swig`, `lgpio`) from Part I.
 
 **Test:** Run `python test_touch.py`. Touch the sensor pad — you should see "TOUCH DETECTED!" in the terminal. Press `Ctrl+C` to exit.
+
+### 4. Temperature & Humidity Sensor (DHT-11)
+
+*Connects via GPIO. Runs on 3.3V or 5V.*
+
+| Sensor Pin | Label | Connect To | Function |
+| --- | --- | --- | --- |
+| **+** | VCC | **Red Rail Right** (3.3V) | Power |
+| **out** | DATA | `GPIO 4` (Pin 7) | Data signal |
+| **-** | GND | **Blue Rail Right** (GND) | Ground |
+
+This is a 3-pin breakout board (PCB with built-in pull-up resistor), so no external resistor is needed — just wire the three pins directly. Use the **3.3V side** (right rails) like the touch sensor.
+
+**Warning:** Although the DHT-11 chip supports 3–5.5V, the data line signals at whatever voltage you supply. At 5V, the data pin would send 5V into the Pi's GPIO, which only tolerates 3.3V. Always power the DHT-11 from the **3.3V rail** when connecting directly to a Raspberry Pi.
+
+**Note:** The sensor has a ~2 second minimum sampling interval between reads.
+
+**Required packages:** `adafruit-circuitpython-dht` (installed via `requirements.txt`), `libgpiod2` (installed via system dependencies in Part I)
+
+**Test:** Run `python test_temperature.py`. You should see temperature and humidity readings every 3 seconds. Press `Ctrl+C` to exit.
 
 ## Part III: The Core (Combined)
 

@@ -6,6 +6,9 @@ luma.core>=2.4.0
 # LCD (1602 I2C) control
 RPLCD>=1.3.0
 
+# DHT11 temperature & humidity sensor
+adafruit-circuitpython-dht>=4.0.0
+
 # Raspberry Pi GPIO and SPI
 # Use rpi-lgpio instead of RPi.GPIO -- drop-in replacement that supports
 # edge detection without root on newer Pi OS (Bookworm/Trixie, gpiochip512).
