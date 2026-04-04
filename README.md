@@ -37,7 +37,8 @@ Note: If using Pi 4B, use the CSI port between the HDMI and Audio jack.
 * [ ] **Servo Motor:** SG90 servo for head nod/shake (`hardware/servo.py`).
 * [ ] **Audio:** USB Microphone + Speaker (`hardware/microphone.py`, `hardware/speaker.py`).
 * [ ] **Camera:** USB Webcam for vision (`hardware/camera.py`).
-* [ ] **Sensors:** HC-SR04 distance, DHT11 temperature (`hardware/distance.py`, `hardware/temperature.py`).
+* [ ] **Sensors:** HC-SR04 distance (`hardware/distance.py`).
+* [x] **Temperature:** DHT11 temperature & humidity sensor (`hardware/temperature.py`).
 * [x] **Touch:** Capacitive touch sensor (`hardware/touch.py`) — with real-time event notifications to OpenClaw.
 * [ ] **Lighting:** WS2812B NeoPixel LED strip (`hardware/neopixel.py`).
 
@@ -94,7 +95,7 @@ Run these commands to fix common library issues before they happen.
 
 ```bash
 sudo apt-get update && sudo apt-get upgrade -y
-sudo apt-get install -y python3-pip python3-venv python3-dev libjpeg-dev zlib1g-dev libfreetype6-dev liblcms2-dev libopenjp2-7-dev libtiff5-dev i2c-tools swig liblgpio-dev libgpiod2
+sudo apt-get install -y python3-pip python3-venv python3-dev libjpeg-dev zlib1g-dev libfreetype6-dev liblcms2-dev libopenjp2-7-dev libtiff5-dev i2c-tools swig liblgpio-dev libgpiod3
 
 ```
 
@@ -263,7 +264,7 @@ This is a 3-pin breakout board (PCB with built-in pull-up resistor), so no exter
 
 **Note:** The sensor has a ~2 second minimum sampling interval between reads.
 
-**Required packages:** `adafruit-circuitpython-dht` (installed via `requirements.txt`), `libgpiod2` (installed via system dependencies in Part I)
+**Required packages:** `adafruit-circuitpython-dht` (installed via `requirements.txt`), `libgpiod3` (installed via system dependencies in Part I)
 
 **Test:** Run `python test_temperature.py`. You should see temperature and humidity readings every 3 seconds. Press `Ctrl+C` to exit.
 
@@ -289,6 +290,7 @@ hardware/ package
     ├── face.py    → MAX7219 LED Matrix (SPI)
     ├── lcd.py     → 1602 LCD Display (I2C)
     ├── touch.py   → TTP223 Touch Sensor (GPIO) ← emits events → OpenClaw
+    ├── temperature.py → DHT11 Temp/Humidity (GPIO) ← emits events → OpenClaw
     └── (future)   → servo.py, mic.py, distance.py, ...
 ```
 
@@ -301,7 +303,8 @@ totem/
 │   ├── base.py                # HardwareModule abstract base class (+ event system)
 │   ├── face.py                # MAX7219 face (expressions, drawing, animations)
 │   ├── lcd.py                 # 1602 LCD (text, custom chars, full HD44780 API)
-│   └── touch.py               # TTP223 touch sensor (events → OpenClaw)
+│   ├── touch.py               # TTP223 touch sensor (events → OpenClaw)
+│   └── temperature.py         # DHT11 temperature & humidity (events → OpenClaw)
 ├── expressions.py             # Face bitmap library (all 8x8 grids)
 ├── totem_daemon.py            # Background daemon (Unix socket server)
 ├── totem_ctl.py               # CLI client (sends JSON commands to daemon)

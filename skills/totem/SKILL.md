@@ -24,6 +24,7 @@ Run `totem_ctl capabilities` to dynamically discover all available hardware modu
 | **Face** (MAX7219) | 8x8 LED matrix | 64 pixels | SPI |
 | **LCD** (1602) | Character display | 16 cols x 2 rows | I2C |
 | **Touch** (TTP223) | Capacitive sensor | Binary (touched/released) | GPIO 17 |
+| **Temperature** (DHT11) | Temp & humidity sensor | °C / °F / % | GPIO 4 |
 
 ---
 
@@ -196,6 +197,47 @@ If you need to check for events programmatically:
 ```bash
 totem_ctl events                       # Get and clear pending events (JSON)
 totem_ctl events --peek                # Read events without clearing
+```
+
+---
+
+## Quick Reference: Temperature & Humidity Sensor
+
+The temperature sensor reads ambient temperature and humidity. It can also run in the background and alert you when thresholds are crossed.
+
+### Reading
+```bash
+totem_ctl temperature read                    # Temperature in Celsius + humidity
+totem_ctl temperature read --unit F           # Temperature in Fahrenheit + humidity
+```
+
+### Background Monitoring (threshold alerts)
+```bash
+totem_ctl temperature watch --temp_max 30                    # Alert if temp > 30°C
+totem_ctl temperature watch --temp_min 15 --humidity_max 70  # Multiple thresholds
+totem_ctl temperature watch --interval 5                     # Custom polling interval (min 2s)
+totem_ctl temperature stop                                   # Stop monitoring
+```
+
+### Configuration
+```bash
+totem_ctl temperature config --interval 5    # Change polling interval (seconds, min 2)
+```
+
+### Hardware Events (automatic)
+
+When monitoring is active and a threshold is crossed, events are delivered to you automatically as `System:` lines in the conversation. You do **not** need to poll for them. Examples:
+
+> System: temperature sensor: temperature_alert — 31.0°C is above threshold 30.0°C.
+
+> System: temperature sensor: humidity_alert — 75.0% is above threshold 70.0%.
+
+Alerts fire only on the **transition** (when the value first crosses the threshold), not repeatedly while it stays above/below.
+
+### Polling Events (manual)
+```bash
+totem_ctl events                             # Get and clear pending events (JSON)
+totem_ctl events --peek                      # Read events without clearing
 ```
 
 ---
