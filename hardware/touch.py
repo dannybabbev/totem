@@ -32,11 +32,12 @@ class TouchModule(HardwareModule):
         return "TTP223 capacitive touch sensor on GPIO 17 (3.3V, active high)"
 
     def init(self):
-        import RPi.GPIO as GPIO
-        self._GPIO = GPIO
+        import lgpio
+        self._lgpio = lgpio
 
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setup(self.TOUCH_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+        self._chip = lgpio.gpiochip_open(0)
+        lgpio.gpio_claim_alert(self._chip, self.TOUCH_PIN, lgpio.BOTH_EDGES, lgpio.SET_PULL_DOWN)
+        self._cb = lgpio.callback(self._chip, self.TOUCH_PIN, lgpio.BOTH_EDGES, self._gpio_callback)
 
         # State tracking
         self._is_touched = False
@@ -44,23 +45,16 @@ class TouchModule(HardwareModule):
         self._last_touch_time = None
         self._last_release_time = None
         self._debounce_ms = self.DEFAULT_DEBOUNCE
+        self._last_edge_time = 0  # software debounce
         self._lock = threading.Lock()
-
-        # Register interrupt-based edge detection for both edges
-        GPIO.add_event_detect(
-            self.TOUCH_PIN,
-            GPIO.BOTH,
-            callback=self._gpio_callback,
-            bouncetime=self._debounce_ms,
-        )
 
     def cleanup(self):
         try:
-            self._GPIO.remove_event_detect(self.TOUCH_PIN)
+            self._cb.cancel()
         except Exception:
             pass
         try:
-            self._GPIO.cleanup(self.TOUCH_PIN)
+            self._lgpio.gpiochip_close(self._chip)
         except Exception:
             pass
 
@@ -126,18 +120,6 @@ class TouchModule(HardwareModule):
             debounce = max(50, min(2000, int(debounce)))
             self._debounce_ms = debounce
 
-            # Re-register edge detection with new debounce
-            try:
-                self._GPIO.remove_event_detect(self.TOUCH_PIN)
-            except Exception:
-                pass
-            self._GPIO.add_event_detect(
-                self.TOUCH_PIN,
-                self._GPIO.BOTH,
-                callback=self._gpio_callback,
-                bouncetime=self._debounce_ms,
-            )
-
         return self._ok({"debounce_ms": self._debounce_ms})
 
     def _cmd_reset(self, _params):
@@ -147,16 +129,20 @@ class TouchModule(HardwareModule):
 
     # --- GPIO interrupt handler ---------------------------------------------
 
-    def _gpio_callback(self, channel):
+    def _gpio_callback(self, chip, gpio, level, tick):
         """
-        Called by RPi.GPIO on both rising and falling edges.
-        Reads the current pin state to determine touch vs release.
+        Called by lgpio on both rising and falling edges.
+        level: 0 = LOW (released), 1 = HIGH (touched), 2 = watchdog timeout.
         """
-        current = self._GPIO.input(self.TOUCH_PIN)
         now = time.time()
 
+        # Software debounce
+        if (now - self._last_edge_time) * 1000 < self._debounce_ms:
+            return
+        self._last_edge_time = now
+
         with self._lock:
-            if current == self._GPIO.HIGH and not self._is_touched:
+            if level == 1 and not self._is_touched:
                 # Touch detected (rising edge)
                 self._is_touched = True
                 self._touch_count += 1
@@ -168,7 +154,7 @@ class TouchModule(HardwareModule):
                     "timestamp": now,
                 })
 
-            elif current == self._GPIO.LOW and self._is_touched:
+            elif level == 0 and self._is_touched:
                 # Release detected (falling edge)
                 self._is_touched = False
                 self._last_release_time = now
