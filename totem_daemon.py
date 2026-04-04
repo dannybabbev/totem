@@ -157,6 +157,38 @@ class TotemDaemon:
             else:
                 print(f"  [SKIP] Touch cooldown ({self._notify_cooldown}s)")
 
+        # Temperature / humidity threshold alerts
+        elif event_type in ("temperature_alert", "humidity_alert"):
+            now = time.time()
+            if now - self._last_notify_time >= self._notify_cooldown:
+                self._last_notify_time = now
+
+                # Instant physical reaction — show alert on LCD
+                with self._lock:
+                    if "lcd" in self._modules:
+                        d = event["data"]
+                        if event_type == "temperature_alert":
+                            line1 = f"Temp {d.get('direction', '?')}"
+                            line2 = f"{d.get('temperature_c')}C > {d.get('threshold')}C"
+                        else:
+                            line1 = f"Humidity {d.get('direction', '?')}"
+                            line2 = f"{d.get('humidity')}% > {d.get('threshold')}%"
+                        self._modules["lcd"].handle_command("write", {
+                            "line1": line1, "line2": line2, "align": "center",
+                        })
+
+                # Dispatch to OpenClaw in a background thread
+                if self._notify_enabled and self._openclaw_bin:
+                    thread = threading.Thread(
+                        target=self._dispatch_openclaw_event,
+                        args=(event,),
+                        daemon=True,
+                    )
+                    thread.start()
+            else:
+                print(f"  [SKIP] Alert cooldown ({self._notify_cooldown}s)")
+
+    # https://docs.openclaw.ai/cli/system
     def _dispatch_openclaw_event(self, event):
         """
         Notify OpenClaw by running: openclaw system event --text "..." --mode now
@@ -173,6 +205,10 @@ class TotemDaemon:
             parts.append(f"Touch count: {data['touch_count']}.")
         if "duration_ms" in data:
             parts.append(f"Duration: {data['duration_ms']}ms.")
+        if "temperature_c" in data:
+            parts.append(f"Temperature: {data['temperature_c']}°C, direction: {data.get('direction')}, threshold: {data.get('threshold')}°C.")
+        if "humidity" in data:
+            parts.append(f"Humidity: {data['humidity']}%, direction: {data.get('direction')}, threshold: {data.get('threshold')}%.")
         parts.append(
             "React to this physically -- use totem_ctl to show a reaction "
             "on the face and LCD."

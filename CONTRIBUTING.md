@@ -466,3 +466,92 @@ down to 3.3V for the Pi's GPIO input.*
    - Use descriptive `event_type` strings: `"touched"`, `"released"`, `"speech_detected"`, `"object_nearby"`, `"temperature_alert"`.
    - The `_emit_event()` call is non-blocking -- the daemon dispatches the notification in a background thread.
    - Events are also stored in the daemon's internal event queue, accessible via `totem_ctl events`.
+
+---
+
+## Event Notification Workflow
+
+When a sensor module detects something noteworthy (touch, temperature spike, speech, etc.), the event flows through this pipeline to reach the AI agent:
+
+```
+Hardware Module                Daemon (_on_event)              OpenClaw Agent
+     │                              │                              │
+     │  _emit_event("type", data)   │                              │
+     │ ──────────────────────────>   │                              │
+     │                              │  1. Store in event queue      │
+     │                              │  2. Physical reaction         │
+     │                              │     (face/LCD, instant)       │
+     │                              │  3. Dispatch to OpenClaw      │
+     │                              │     (background thread)       │
+     │                              │                              │
+     │                              │  openclaw system event        │
+     │                              │  --text "..." --mode now      │
+     │                              │ ──────────────────────────>   │
+     │                              │                              │  Sees "System:" line
+     │                              │                              │  in conversation,
+     │                              │                              │  reacts with totem_ctl
+```
+
+### Step-by-step
+
+1. **Module emits event.** The hardware module calls `self._emit_event("event_type", {"key": "value", "timestamp": time.time()})`. This is non-blocking — the daemon's callback runs in the module's thread context.
+
+2. **Daemon stores it.** `_on_event()` in `totem_daemon.py` appends the event to an internal queue (capped at 100 entries). Events are readable via `totem_ctl events` or `totem_ctl events --peek`.
+
+3. **Daemon reacts physically (optional).** Before the AI agent even knows, the daemon can trigger an instant hardware reaction — change the face expression, write to the LCD, etc. This gives the robot sub-second physical responsiveness. Each event type has its own reaction block in `_on_event()`.
+
+4. **Daemon dispatches to OpenClaw.** In a background thread, the daemon runs:
+   ```bash
+   openclaw system event --text "<descriptive message>" --mode now
+   ```
+   This injects a `System:` line into the agent's active conversation and triggers an immediate heartbeat, so the agent processes it right away (no waiting for the next poll). See [OpenClaw CLI: system event](https://docs.openclaw.ai/cli/system) for full documentation.
+
+5. **Agent reacts.** The OpenClaw agent sees the `System:` line in context and can run `totem_ctl` commands to react — change the face, write to LCD, respond in chat, etc.
+
+### Cooldown
+
+The daemon enforces a **5-second cooldown** (`self._notify_cooldown`) between OpenClaw notifications. If multiple events fire within 5 seconds, only the first one dispatches — the rest are logged but skipped. This prevents flooding the agent with rapid-fire events (e.g., a sensor bouncing around a threshold).
+
+The cooldown is shared across all event types. Physical reactions still happen even during cooldown — only the OpenClaw dispatch is suppressed.
+
+### Adding a new event type to the daemon
+
+When you add a new sensor module that emits events, you need to add a handler in `_on_event()` in `totem_daemon.py`:
+
+1. **Add an `elif` block** for your event type(s) after the existing handlers:
+
+   ```python
+   # In _on_event():
+   elif event_type == "your_event_type":
+       now = time.time()
+       if now - self._last_notify_time >= self._notify_cooldown:
+           self._last_notify_time = now
+
+           # Optional: instant physical reaction
+           with self._lock:
+               if "face" in self._modules:
+                   self._modules["face"].handle_command("expression", {"name": "surprised"})
+               if "lcd" in self._modules:
+                   self._modules["lcd"].handle_command("write", {
+                       "line1": "Alert!", "line2": "Details here", "align": "center",
+                   })
+
+           # Dispatch to OpenClaw
+           if self._notify_enabled and self._openclaw_bin:
+               thread = threading.Thread(
+                   target=self._dispatch_openclaw_event,
+                   args=(event,),
+                   daemon=True,
+               )
+               thread.start()
+   ```
+
+2. **Add data formatting** in `_dispatch_openclaw_event()` so your event's payload is included in the text message sent to OpenClaw:
+
+   ```python
+   # In _dispatch_openclaw_event():
+   if "your_data_key" in data:
+       parts.append(f"Your value: {data['your_data_key']}.")
+   ```
+
+   The text message is built as a list of `parts` joined by spaces. The first part is always `"<module> sensor: <event_type> at <timestamp>."` and the last part is always `"React to this physically -- use totem_ctl to show a reaction on the face and LCD."`
