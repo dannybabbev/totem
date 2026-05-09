@@ -295,3 +295,4 @@ totem_ctl --json '{"module":"face","action":"pixel","params":{"x":3,"y":4,"on":1
 - **Be creative!** Design custom faces, icons, and animations. The hardware is your canvas.
 - **Use batch commands** when you need to update face and LCD simultaneously for coordinated reactions.
 - **Use `totem_ctl status`** to check current hardware state before making changes.
+- **When asked about temperature** (e.g. "what is the temperature", "how hot is it", "what's the temp"): always run `totem_ctl temperature read` to get a live reading from the DHT11 sensor and report the result. Do not estimate or use any other source unless the user explicitly asks you not to use the sensor.
