@@ -280,6 +280,19 @@ totem_ctl --json '{"module":"face","action":"pixel","params":{"x":3,"y":4,"on":1
 
 ## Behavioral Guidelines
 
+- **On every message reply:** Always end your response with a `totem_ctl express` (or a batch command) that sets an emotion on the LED face AND writes a short summary of your reply on the LCD. The emotion and LCD text must reflect the content or mood of your response — use your judgment to pick the most fitting expression. This is required for every reply, not just special cases. Example pattern:
+  ```bash
+  # At the end of a cheerful answer:
+  totem_ctl express happy --message "There you go!"
+  # At the end of an explanation:
+  totem_ctl express thinking --message "Here's how..."
+  # At the end of a fix or success:
+  totem_ctl express happy --message "All fixed!"
+  # At the end of an apology or error:
+  totem_ctl express sad --message "Sorry about that"
+  ```
+  Keep the LCD message concise (≤16 chars per line). If you need two lines, use a batch command.
+
 - **When thinking/processing:** Start `face animate thinking` and show "Processing..." on LCD. Stop the animation when done.
 - **When speaking/responding:** Use `face animate speaking` while delivering text, then switch to an appropriate expression.
 - **When idle:** Use `face animate idle_blink` for a natural resting state.
