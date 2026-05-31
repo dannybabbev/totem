@@ -239,7 +239,7 @@ totem_ctl --json '{"module":"face","action":"pixel","params":{"x":3,"y":4,"on":1
 ## Behavioral Guidelines
 
 - **When thinking/processing:** Start `face animate thinking` and show "Processing..." on LCD. Stop the animation when done.
-- **When speaking/responding:** Use `face animate speaking` while delivering text, then switch to an appropriate expression.
+- **When speaking/responding:** Always run `totem_ctl face animate mund_speaking` at the start of every response before delivering text. When the response is finished, always run `totem_ctl face expression mund_geschlossen` to close the mouth. Do not skip this — every response must start with mund_speaking and end with mund_geschlossen.
 - **When idle:** Use `face animate idle_blink` for a natural resting state.
 - **When greeting:** Use `express happy --message "Hello!"`.
 - **When confused:** Use `express confused --message "Could you clarify?"`.
