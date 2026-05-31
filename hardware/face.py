@@ -91,7 +91,7 @@ class FaceModule(HardwareModule):
                         "type": "str",
                         "required": True,
                         "description": "Animation name",
-                        "options": ["thinking", "speaking", "listening", "sleeping", "idle_blink"],
+                        "options": ["thinking", "speaking", "listening", "sleeping", "idle_blink", "mund_speaking"],
                     },
                     "duration": {
                         "type": "float",
@@ -295,6 +295,7 @@ class FaceModule(HardwareModule):
             "listening": self._anim_listening,
             "sleeping": self._anim_sleeping,
             "idle_blink": self._anim_idle_blink,
+            "mund_speaking": self._anim_mund_speaking,
         }
 
         if name not in animations:
@@ -546,6 +547,23 @@ class FaceModule(HardwareModule):
             self._draw_grid(expr_lib.BLINK)
             self._flush()
             self._anim_stop.wait(0.15)
+
+    def _anim_mund_speaking(self, duration):
+        """Cycling through MUND_OFFEN → MUND_HALB → MUND_GESCHLOSSEN for a natural speaking look."""
+        end_time = time.time() + duration if duration > 0 else float("inf")
+        cycle = [
+            (expr_lib.MUND_OFFEN, 0.12),
+            (expr_lib.MUND_HALB, 0.08),
+            (expr_lib.MUND_GESCHLOSSEN, 0.10),
+            (expr_lib.MUND_HALB, 0.08),
+        ]
+        i = 0
+        while time.time() < end_time and not self._anim_stop.is_set():
+            grid, delay = cycle[i % len(cycle)]
+            self._draw_grid(grid)
+            self._flush()
+            self._anim_stop.wait(delay + random.uniform(-0.02, 0.02))
+            i += 1
 
     def _anim_sequence(self, frames, loop):
         """Play a custom frame sequence."""

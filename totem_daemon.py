@@ -11,8 +11,8 @@ Usage:
     python totem_daemon.py --status     # Check if daemon is running
     python totem_daemon.py --stop       # Stop a running daemon
 
-Socket: /tmp/totem.sock
-PID file: /tmp/totem.pid
+Socket: ~/.totem/totem.sock
+PID file: ~/.totem/totem.pid
 
 Protocol:
     Client sends JSON:  {"module": "face", "action": "expression", "params": {"name": "happy"}}
@@ -37,8 +37,8 @@ import traceback
 
 from hardware.base import HardwareModule
 
-SOCKET_PATH = "/tmp/totem.sock"
-PID_FILE = "/tmp/totem.pid"
+SOCKET_PATH = os.path.expanduser("~/.totem/totem.sock")
+PID_FILE = os.path.expanduser("~/.totem/totem.pid")
 BUFFER_SIZE = 65536
 
 
@@ -314,6 +314,9 @@ class TotemDaemon:
         print("=" * 50)
         print("  TOTEM DAEMON")
         print("=" * 50)
+
+        # Ensure socket directory exists
+        os.makedirs(os.path.dirname(SOCKET_PATH), exist_ok=True)
 
         # Clean up stale socket
         if os.path.exists(SOCKET_PATH):
