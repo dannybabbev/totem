@@ -197,7 +197,7 @@ class TotemDaemon:
             wave_num = data.get("wave_count", "?")
             threading.Thread(
                 target=self._react_and_restore,
-                args=("happy", "Hey, I saw that!", f"Wave #{wave_num} :)"),
+                args=("excited", "Hey, I saw that!", f"Wave #{wave_num} :)"),
                 daemon=True,
             ).start()
             now = time.time()
