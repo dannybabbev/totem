@@ -97,7 +97,7 @@ class TotemDaemon:
         self._module_notify = dict(NOTIFY_DEFAULTS)  # per-module toggle, see NOTIFY_DEFAULTS
         self._openclaw_bin = shutil.which("openclaw")
         self._last_notify_time = 0
-        self._notify_cooldown = 5   # minimum seconds between notifications
+        self._notify_cooldown = 30   # minimum seconds between notifications
 
     # --- Module discovery and initialization --------------------------------
 
@@ -226,7 +226,7 @@ class TotemDaemon:
             else:
                 log.debug("Alert event skipped — cooldown (%ss)", self._notify_cooldown)
 
-    def _react_and_restore(self, face_expr, lcd_line1, lcd_line2, hold_sec=1.5):
+    def _react_and_restore(self, face_expr, lcd_line1, lcd_line2, hold_sec=3.0):
         """
         Apply a physical reaction on face + LCD, hold for hold_sec, then restore
         the previous state. Runs in a background thread — never blocks the caller.
