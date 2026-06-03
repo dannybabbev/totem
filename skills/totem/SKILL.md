@@ -1,6 +1,6 @@
 ---
 name: totem-hardware
-description: Control Totem robot hardware - LED face, LCD display, animations, and custom drawing. Run `totem_ctl capabilities` to discover all available hardware and actions.
+description: Control Totem robot hardware - LED mouth display, LCD display, animations, and custom drawing. Run `totem_ctl capabilities` to discover all available hardware and actions.
 metadata: {"openclaw":{"requires":{"bins":["python3"]}}}
 ---
 
@@ -21,27 +21,29 @@ Run `totem_ctl capabilities` to dynamically discover all available hardware modu
 
 | Component | Display | Resolution | Interface |
 |-----------|---------|------------|-----------|
-| **Face** (MAX7219) | 8x8 LED matrix | 64 pixels | SPI |
+| **Mouth** (MAX7219) | 8x8 LED matrix | 64 pixels | SPI |
 | **LCD** (1602) | Character display | 16 cols x 2 rows | I2C |
 | **Touch** (TTP223) | Capacitive sensor | Binary (touched/released) | GPIO 17 |
 | **Temperature** (DHT11) | Temp & humidity sensor | °C / °F / % | GPIO 4 |
 
 ---
 
-## Quick Reference: Face (LED Matrix)
+## Quick Reference: Mouth (LED Matrix)
 
-The face is an 8x8 LED grid. Coordinates: (0,0) = top-left, (7,7) = bottom-right.
+The mouth display is an 8x8 LED grid (command module is still called `face`). Coordinates: (0,0) = top-left, (7,7) = bottom-right. The outer rows/cols are the face outline; rows 2–5 are the **mouth zone** — eyes are handled by the ultrasonic sensor (separate hardware).
 
 ### Named Expressions
 ```bash
-totem_ctl face expression neutral
-totem_ctl face expression happy
-totem_ctl face expression sad
-totem_ctl face expression angry
-totem_ctl face expression surprised
-totem_ctl face expression thinking
-totem_ctl face expression confused
-totem_ctl face expression sleepy
+totem_ctl face expression neutral      # Flat line
+totem_ctl face expression happy        # Gentle smile
+totem_ctl face expression sad          # Frown
+totem_ctl face expression angry        # Tight gritted grimace
+totem_ctl face expression surprised    # Large open O mouth
+totem_ctl face expression thinking     # Small mouth pushed to the right
+totem_ctl face expression confused     # Zigzag wavy mouth
+totem_ctl face expression sleepy       # Small drowsy yawn oval
+totem_ctl face expression excited      # Huge grin, corners reach top of mouth zone
+totem_ctl face expression smirk        # Asymmetric right-side smirk
 totem_ctl face expression heart        # Heart icon
 totem_ctl face expression skull        # Skull icon
 totem_ctl face expression check        # Checkmark
@@ -51,10 +53,10 @@ totem_ctl face expression cross        # X mark
 ### Animations (run in background)
 ```bash
 totem_ctl face animate thinking        # Spinning line
-totem_ctl face animate speaking        # Mouth flapping
+totem_ctl face animate speaking        # Mouth opening and closing
 totem_ctl face animate listening       # Pulsing circles
 totem_ctl face animate sleeping        # Floating Zzz
-totem_ctl face animate idle_blink      # Neutral with random blinks
+totem_ctl face animate idle_blink      # Neutral with occasional random smirks
 totem_ctl face animate thinking --duration 5   # Auto-stop after 5s
 totem_ctl face stop                    # Stop any animation
 ```
@@ -280,7 +282,7 @@ totem_ctl --json '{"module":"face","action":"pixel","params":{"x":3,"y":4,"on":1
 
 ## Behavioral Guidelines
 
-- **On every message reply:** Always end your response with a `totem_ctl express` (or a batch command) that sets an emotion on the LED face AND writes a short summary of your reply on the LCD. The emotion and LCD text must reflect the content or mood of your response — use your judgment to pick the most fitting expression. This is required for every reply, not just special cases. Example pattern:
+- **On every message reply:** Always end your response with a `totem_ctl express` (or a batch command) that sets an emotion on the LED mouth AND writes a short summary of your reply on the LCD. The emotion and LCD text must reflect the content or mood of your response — use your judgment to pick the most fitting expression. This is required for every reply, not just special cases. Example pattern:
   ```bash
   # At the end of a cheerful answer:
   totem_ctl express happy --message "There you go!"
@@ -305,7 +307,7 @@ totem_ctl --json '{"module":"face","action":"pixel","params":{"x":3,"y":4,"on":1
   - `express happy --message "Hey there!"`
   - If touched repeatedly: `express happy --message "That tickles!"`
   - On release after a long touch: acknowledge the duration, e.g. "That was a nice long pat."
-- **Be creative!** Design custom faces, icons, and animations. The hardware is your canvas.
+- **Be creative!** Design custom mouth expressions, icons, and animations. The hardware is your canvas. Remember: eyes come from the ultrasonic sensor — lean into expressive mouths to convey emotion.
 - **Use batch commands** when you need to update face and LCD simultaneously for coordinated reactions.
 - **Use `totem_ctl status`** to check current hardware state before making changes.
 - **When asked about temperature** (e.g. "what is the temperature", "how hot is it", "what's the temp"): always run `totem_ctl temperature read` to get a live reading from the DHT11 sensor and report the result. Do not estimate or use any other source unless the user explicitly asks you not to use the sensor.

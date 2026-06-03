@@ -320,8 +320,8 @@ class FaceModule(HardwareModule):
         self._stop_animation()
         # Save current buffer
         saved = self._buffer.copy()
-        # Draw blink frame
-        self._draw_grid(expr_lib.BLINK)
+        # Flash a smirk (wink equivalent without eyes)
+        self._draw_grid(expr_lib.SMIRK)
         self._flush()
         time.sleep(duration_ms / 1000.0)
         # Restore
@@ -531,19 +531,19 @@ class FaceModule(HardwareModule):
                 self._anim_stop.wait(0.4)
 
     def _anim_idle_blink(self, duration):
-        """Neutral face with periodic random blinks."""
+        """Neutral face with periodic random smirks (wink equivalent without eyes)."""
         end_time = time.time() + duration if duration > 0 else float("inf")
         while time.time() < end_time and not self._anim_stop.is_set():
             # Show neutral
             self._draw_grid(expr_lib.NEUTRAL)
             self._flush()
-            # Wait random interval before blinking
+            # Wait random interval before smirking
             wait = random.uniform(2.0, 5.0)
             self._anim_stop.wait(wait)
             if self._anim_stop.is_set():
                 break
-            # Blink
-            self._draw_grid(expr_lib.BLINK)
+            # Quick smirk
+            self._draw_grid(expr_lib.SMIRK)
             self._flush()
             self._anim_stop.wait(0.15)
 

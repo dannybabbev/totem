@@ -2,7 +2,7 @@
 
 **Giving an AI agent a body for the first time.**
 
-Totem is a Raspberry Pi-based companion robot powered by **[OpenClaw](https://github.com/openclaw/openclaw)**. It starts with an animated 8x8 LED matrix face and a 1602 LCD display — but that's just the beginning. The hardware layer is modular and designed to grow: add a servo for neck movement, a microphone for ears, a speaker for voice, a camera for sight, sensors for touch and awareness. Every new module snaps in and the AI agent can immediately use it.
+Totem is a Raspberry Pi-based companion robot powered by **[OpenClaw](https://github.com/openclaw/openclaw)**. It starts with an animated 8x8 LED matrix mouth display and a 1602 LCD display — but that's just the beginning. The hardware layer is modular and designed to grow: add a servo for neck movement, a microphone for ears, a speaker for voice, a camera for sight, sensors for touch and awareness. Every new module snaps in and the AI agent can immediately use it.
 
 This isn't a static gadget. It's a body that expands endlessly, giving your AI agent a physical presence in the real world.
 
@@ -11,7 +11,7 @@ This isn't a static gadget. It's a body that expands endlessly, giving your AI a
 ### Phase 1: The Body (Hardware & Drivers)
 
 * [x] **Setup Raspberry Pi:** OS installed, SPI/I2C enabled, System dependencies fixed.
-* [x] **The Face:** Connect MAX7219 Matrix and run `animator.py`.
+* [x] **The Mouth:** Connect MAX7219 Matrix and run `animator.py`. Displays mouth-only expressions (eyes handled by ultrasonic sensor).
 * [x] **The Voice (Text):** Connect 1602 LCD and run `lcd_test.py`.
 * [x] **Core Integration:** Run `totem_core.py` to sync Face and LCD.
 * [ ] **Connect Servo Motor:** Wire SG90 servo for neck movement (Nod/Shake).
@@ -196,7 +196,7 @@ We need to distribute 5V and GND to multiple components. Use the breadboard's si
 
 Now all components can draw power from these rails instead of fighting for space on the T-Cobbler.
 
-### 1. The Face (MAX7219 Matrix)
+### 1. The Mouth (MAX7219 Matrix)
 
 *Connects via SPI. Use the **Left** side of the T-Cobbler.*
 
