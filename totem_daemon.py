@@ -41,6 +41,14 @@ SOCKET_PATH = "/tmp/totem.sock"
 PID_FILE = "/tmp/totem.pid"
 BUFFER_SIZE = 65536
 
+# Per-module OpenClaw dispatch defaults.
+# Set a module to False to disable push notifications at startup.
+# Can also be toggled at runtime: totem_ctl notify <module> on|off
+NOTIFY_DEFAULTS = {
+    "touch":    True,
+    "distance": True,
+}
+
 
 class TotemDaemon:
     """Main daemon that discovers, initializes, and routes commands to hardware modules."""
@@ -55,6 +63,7 @@ class TotemDaemon:
         self._events = []  # timestamped event log
         self._events_lock = threading.Lock()
         self._notify_enabled = os.environ.get("TOTEM_NOTIFY_ENABLED", "true").lower() != "false"
+        self._module_notify = dict(NOTIFY_DEFAULTS)  # per-module toggle, see NOTIFY_DEFAULTS
         self._openclaw_bin = shutil.which("openclaw")
         self._last_notify_time = 0  # timestamp of last OpenClaw notification
         self._notify_cooldown = 5   # minimum seconds between notifications
@@ -114,7 +123,8 @@ class TotemDaemon:
     def _on_event(self, module_name, event_type, data):
         """
         Called by hardware modules via _emit_event().
-        Stores the event and dispatches a notification to OpenClaw.
+        Stores the event, fires non-blocking physical reactions, and optionally
+        dispatches to OpenClaw (respects per-module notify toggle).
         """
         event = {
             "module": module_name,
@@ -127,66 +137,96 @@ class TotemDaemon:
         # Store in event queue
         with self._events_lock:
             self._events.append(event)
-            # Keep at most 100 events to prevent unbounded growth
             if len(self._events) > 100:
                 self._events = self._events[-100:]
 
         print(f"  [EVENT] {module_name}: {event_type} {data}")
 
-        # Instant physical reaction + OpenClaw dispatch (touched events only, with cooldown)
+        def _dispatch_if_allowed():
+            if self._notify_enabled and self._module_notify.get(module_name, True) and self._openclaw_bin:
+                threading.Thread(
+                    target=self._dispatch_openclaw_event,
+                    args=(event,),
+                    daemon=True,
+                ).start()
+
         if event_type == "touched":
             now = time.time()
             if now - self._last_notify_time >= self._notify_cooldown:
                 self._last_notify_time = now
-
-                # Instant physical reaction -- respond before the agent even knows
-                with self._lock:
-                    if "face" in self._modules:
-                        self._modules["face"].handle_command("expression", {"name": "surprised"})
-                    if "lcd" in self._modules:
-                        self._modules["lcd"].handle_command("write", {"line1": "I felt that!", "line2": "Thinking...", "align": "center"})
-
-                # Dispatch to OpenClaw in a background thread
-                if self._notify_enabled and self._openclaw_bin:
-                    thread = threading.Thread(
-                        target=self._dispatch_openclaw_event,
-                        args=(event,),
-                        daemon=True,
-                    )
-                    thread.start()
+                threading.Thread(
+                    target=self._react_and_restore,
+                    args=("surprised", "I felt that!", "Thinking..."),
+                    daemon=True,
+                ).start()
+                _dispatch_if_allowed()
             else:
                 print(f"  [SKIP] Touch cooldown ({self._notify_cooldown}s)")
 
-        # Temperature / humidity threshold alerts
+        elif event_type == "wave_detected":
+            now = time.time()
+            if now - self._last_notify_time >= self._notify_cooldown:
+                self._last_notify_time = now
+                wave_num = data.get("wave_count", "?")
+                threading.Thread(
+                    target=self._react_and_restore,
+                    args=("happy", "Hey, I saw that!", f"Wave #{wave_num} :)"),
+                    daemon=True,
+                ).start()
+                _dispatch_if_allowed()
+            else:
+                print(f"  [SKIP] Wave cooldown ({self._notify_cooldown}s)")
+
         elif event_type in ("temperature_alert", "humidity_alert"):
             now = time.time()
             if now - self._last_notify_time >= self._notify_cooldown:
                 self._last_notify_time = now
-
-                # Instant physical reaction — show alert on LCD
+                d = event["data"]
+                if event_type == "temperature_alert":
+                    line1 = f"Temp {d.get('direction', '?')}"
+                    line2 = f"{d.get('temperature_c')}C > {d.get('threshold')}C"
+                else:
+                    line1 = f"Humidity {d.get('direction', '?')}"
+                    line2 = f"{d.get('humidity')}% > {d.get('threshold')}%"
                 with self._lock:
                     if "lcd" in self._modules:
-                        d = event["data"]
-                        if event_type == "temperature_alert":
-                            line1 = f"Temp {d.get('direction', '?')}"
-                            line2 = f"{d.get('temperature_c')}C > {d.get('threshold')}C"
-                        else:
-                            line1 = f"Humidity {d.get('direction', '?')}"
-                            line2 = f"{d.get('humidity')}% > {d.get('threshold')}%"
                         self._modules["lcd"].handle_command("write", {
                             "line1": line1, "line2": line2, "align": "center",
                         })
-
-                # Dispatch to OpenClaw in a background thread
-                if self._notify_enabled and self._openclaw_bin:
-                    thread = threading.Thread(
-                        target=self._dispatch_openclaw_event,
-                        args=(event,),
-                        daemon=True,
-                    )
-                    thread.start()
+                _dispatch_if_allowed()
             else:
                 print(f"  [SKIP] Alert cooldown ({self._notify_cooldown}s)")
+
+    def _react_and_restore(self, face_expr, lcd_line1, lcd_line2, hold_sec=1.5):
+        """
+        Apply a physical reaction on face + LCD, hold for hold_sec, then restore
+        the previous state. Runs in a background thread — never blocks the caller.
+        The lock is released during the sleep so CLI commands remain responsive.
+        """
+        # Step 1: snapshot current state and apply reaction
+        with self._lock:
+            face_state = self._modules["face"].get_state() if "face" in self._modules else None
+            lcd_state  = self._modules["lcd"].get_state()  if "lcd"  in self._modules else None
+            if face_state is not None:
+                self._modules["face"].handle_command("expression", {"name": face_expr})
+            if lcd_state is not None:
+                self._modules["lcd"].handle_command("write", {
+                    "line1": lcd_line1, "line2": lcd_line2, "align": "center",
+                })
+
+        # Step 2: hold (lock released so other commands go through)
+        time.sleep(hold_sec)
+
+        # Step 3: restore previous state
+        with self._lock:
+            if face_state is not None and "face" in self._modules:
+                prev_expr = face_state.get("current_expression") or "neutral"
+                self._modules["face"].handle_command("expression", {"name": prev_expr})
+            if lcd_state is not None and "lcd" in self._modules:
+                self._modules["lcd"].handle_command("write", {
+                    "line1": lcd_state.get("line1", ""),
+                    "line2": lcd_state.get("line2", ""),
+                })
 
     # https://docs.openclaw.ai/cli/system
     def _dispatch_openclaw_event(self, event):
@@ -205,13 +245,15 @@ class TotemDaemon:
             parts.append(f"Touch count: {data['touch_count']}.")
         if "duration_ms" in data:
             parts.append(f"Duration: {data['duration_ms']}ms.")
+        if "wave_count" in data:
+            parts.append(f"Wave count: {data['wave_count']}. Distance: {data.get('distance_cm')}cm.")
         if "temperature_c" in data:
             parts.append(f"Temperature: {data['temperature_c']}°C, direction: {data.get('direction')}, threshold: {data.get('threshold')}°C.")
         if "humidity" in data:
             parts.append(f"Humidity: {data['humidity']}%, direction: {data.get('direction')}, threshold: {data.get('threshold')}%.")
         parts.append(
-            "React to this physically -- use totem_ctl to show a reaction "
-            "on the face and LCD."
+            "A physical reaction has already been shown on the face and LCD. "
+            "You may respond verbally or trigger additional actions."
         )
         text = " ".join(parts)
 
@@ -309,6 +351,14 @@ class TotemDaemon:
             peek = params.get("peek", False)
             events = self._get_events(peek=peek)
             return {"ok": True, "data": {"events": events, "count": len(events)}}
+
+        if action == "notify":
+            module  = params.get("module")
+            enabled = params.get("enabled")
+            if module is None or enabled is None:
+                return {"ok": True, "data": {"module_notify": self._module_notify}}
+            self._module_notify[module] = bool(enabled)
+            return {"ok": True, "data": {"module": module, "enabled": bool(enabled)}}
 
         return {"ok": False, "error": f"Unknown system action '{action}'"}
 

@@ -25,6 +25,7 @@ Run `totem_ctl capabilities` to dynamically discover all available hardware modu
 | **LCD** (1602) | Character display | 16 cols x 2 rows | I2C |
 | **Touch** (TTP223) | Capacitive sensor | Binary (touched/released) | GPIO 17 |
 | **Temperature** (DHT11) | Temp & humidity sensor | °C / °F / % | GPIO 4 |
+| **Distance** (HC-SR04) | Ultrasonic + wave sensor | 2–400 cm | GPIO 23/24 |
 
 ---
 
@@ -187,11 +188,13 @@ totem_ctl touch config --debounce 300  # Set debounce time in ms (50-2000)
 
 Touch events are delivered to you automatically as `System:` lines in the conversation. You do **not** need to poll for them. When someone touches the sensor, you will see something like:
 
-> System: touch sensor: touched at 2026-02-10T15:30:00. Touch count: 5. React to this physically -- use totem_ctl to show a reaction on the face and LCD.
+> System: touch sensor: touched at 2026-02-10T15:30:00. Touch count: 5. A physical reaction has already been shown on the face and LCD. You may respond verbally or trigger additional actions.
 
 When they release, you will see:
 
-> System: touch sensor: released at 2026-02-10T15:30:02. Duration: 2000ms.
+> System: touch sensor: released at 2026-02-10T15:30:02. Duration: 2000ms. A physical reaction has already been shown on the face and LCD. You may respond verbally or trigger additional actions.
+
+The daemon automatically shows a "surprised" face and "I felt that!" on the LCD for 1.5 seconds, then restores whatever was previously displayed. You don't need to do this yourself.
 
 ### Polling Events (manual)
 
@@ -241,6 +244,55 @@ Alerts fire only on the **transition** (when the value first crosses the thresho
 totem_ctl events                             # Get and clear pending events (JSON)
 totem_ctl events --peek                      # Read events without clearing
 ```
+
+---
+
+## Quick Reference: Distance & Wave Detection (HC-SR04)
+
+The distance sensor measures how far away the nearest object is, and detects wave gestures using an adaptive baseline. The eyes of the robot's 3D-printed face **are** this sensor.
+
+### Reading State
+```bash
+totem_ctl distance read                          # distance_cm, baseline_cm, wave_state, wave_count
+totem_ctl distance reset                         # Reset wave counter to zero
+```
+
+### Tuning Wave Detection
+```bash
+totem_ctl distance config --threshold 10         # cm below baseline to count as hand present (default 10)
+totem_ctl distance config --interval 0.3         # Poll rate in seconds (default 0.3)
+totem_ctl distance config --debounce 3           # Consecutive readings needed to change state
+totem_ctl distance config --max-wave-duration 2  # Max seconds a hand may be present to count as a wave
+```
+
+### Wave Events (automatic)
+
+When a wave is detected, `System:` lines appear automatically in your conversation:
+
+> System: distance sensor: wave_detected at 2026-06-03T12:00:00. Wave count: 3. Distance: 14.2cm. A physical reaction has already been shown on the face and LCD. You may respond verbally or trigger additional actions.
+
+The daemon automatically shows a happy face and "Hey, I saw that! / Wave #N :)" on the LCD for 1.5 seconds, then restores whatever was previously displayed. You don't need to do this yourself.
+
+---
+
+## Controlling OpenClaw Notifications
+
+Physical reactions (face expression + LCD message) and count tracking always happen regardless of this setting. Only the push notification to you (the `System:` lines) is toggled.
+
+```bash
+totem_ctl notify touch off       # Stop touch events reaching you
+totem_ctl notify touch on        # Re-enable
+totem_ctl notify distance off    # Stop wave events reaching you
+totem_ctl notify distance on     # Re-enable
+```
+
+Even when notifications are off, you can always query counts directly:
+```bash
+totem_ctl touch read             # Returns touch_count
+totem_ctl distance read          # Returns wave_count
+```
+
+The defaults are set in `NOTIFY_DEFAULTS` at the top of `totem_daemon.py` — flip a value to `False` to disable a channel permanently at startup without needing to run `notify off` every time.
 
 ---
 

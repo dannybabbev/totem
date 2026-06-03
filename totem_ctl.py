@@ -219,6 +219,24 @@ def build_touch_command(args):
     return {"module": "touch", "action": action, "params": params}
 
 
+def build_distance_command(args):
+    """Build a distance module command from CLI args."""
+    action = args.distance_action
+    params = {}
+
+    if action == "config":
+        if args.interval is not None:
+            params["interval"] = args.interval
+        if args.threshold is not None:
+            params["wave_threshold"] = args.threshold
+        if args.debounce is not None:
+            params["debounce_count"] = args.debounce
+        if args.max_wave_duration is not None:
+            params["max_wave_duration"] = args.max_wave_duration
+
+    return {"module": "distance", "action": action, "params": params}
+
+
 def build_temperature_command(args):
     """Build a temperature module command from CLI args."""
     action = args.temperature_action
@@ -430,6 +448,29 @@ def main():
     # touch reset
     touch_sub.add_parser("reset", help="Reset touch counter to zero")
 
+    # --- Distance / Wave ---
+    sub_dist = subparsers.add_parser("distance", help="HC-SR04 ultrasonic distance & wave sensor")
+    dist_sub = sub_dist.add_subparsers(dest="distance_action", help="Distance action")
+
+    # distance read
+    dist_sub.add_parser("read", help="Read distance, baseline, and wave count")
+
+    # distance reset
+    dist_sub.add_parser("reset", help="Reset wave counter to zero")
+
+    # distance config [--interval N] [--threshold N] [--debounce N] [--max-wave-duration N]
+    dp = dist_sub.add_parser("config", help="Tune wave detection parameters")
+    dp.add_argument("--interval",          type=float, default=None, help="Poll interval in seconds (min 0.1)")
+    dp.add_argument("--threshold",         type=float, default=None, help="cm below baseline to count as hand present")
+    dp.add_argument("--debounce",          type=int,   default=None, help="Consecutive readings needed to change state")
+    dp.add_argument("--max-wave-duration", type=float, default=None, dest="max_wave_duration",
+                    help="Max seconds hand may be present to qualify as a wave")
+
+    # --- Notify ---
+    sub_notify = subparsers.add_parser("notify", help="Toggle OpenClaw event dispatch per module")
+    sub_notify.add_argument("module", choices=["touch", "distance"], help="Module to configure")
+    sub_notify.add_argument("state",  choices=["on", "off"],         help="on = enable, off = disable")
+
     # --- Temperature ---
     sub_temp = subparsers.add_parser("temperature", help="Temperature & humidity sensor")
     temp_sub = sub_temp.add_subparsers(dest="temperature_action", help="Temperature action")
@@ -516,6 +557,20 @@ def main():
             sub_touch.print_help()
             return
         cmd = build_touch_command(args)
+        response = send_command(cmd)
+        print_response(response)
+    elif args.command == "distance":
+        if not args.distance_action:
+            sub_dist.print_help()
+            return
+        cmd = build_distance_command(args)
+        response = send_command(cmd)
+        print_response(response)
+    elif args.command == "notify":
+        cmd = {
+            "action": "notify",
+            "params": {"module": args.module, "enabled": args.state == "on"},
+        }
         response = send_command(cmd)
         print_response(response)
     elif args.command == "temperature":
