@@ -247,13 +247,9 @@ class TotemDaemon:
 
         with self._lock:
             if face_state is not None and "face" in self._modules:
-                prev_expr = face_state.get("current_expression") or "neutral"
-                self._modules["face"].handle_command("expression", {"name": prev_expr})
+                self._modules["face"].handle_command("expression", {"name": "smile"})
             if lcd_state is not None and "lcd" in self._modules:
-                self._modules["lcd"].handle_command("write", {
-                    "line1": lcd_state.get("line1", ""),
-                    "line2": lcd_state.get("line2", ""),
-                })
+                self._modules["lcd"].handle_command("clear", {})
 
     # https://docs.openclaw.ai/cli/system
     def _dispatch_openclaw_event(self, event):
