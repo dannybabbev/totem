@@ -229,9 +229,19 @@ class TotemDaemon:
 
     def _react_and_restore(self, face_expr, lcd_line1, lcd_line2, hold_sec=3.0):
         """
-        Apply a physical reaction on face + LCD, hold for hold_sec, then restore
-        the previous state. Runs in a background thread — never blocks the caller.
-        The lock is released during the sleep so CLI commands remain responsive.
+        Apply a physical reaction on face + LCD, hold for hold_sec, then reset
+        to happy face and clear the LCD. Runs in a background thread.
+
+        Args:
+            face_expr: Expression name to show during the reaction. Valid values:
+                Emotions  — "neutral", "happy", "sad", "angry", "surprised",
+                             "thinking", "confused", "sleepy", "excited", "smirk"
+                Talk      — "talk_open", "talk_closed"
+                Icons     — "heart", "skull", "arrow_up", "check", "cross"
+                Alias     — "blink" (same as "smirk")
+            lcd_line1: Top line of the LCD message.
+            lcd_line2: Bottom line of the LCD message.
+            hold_sec:  Seconds to hold the reaction before resetting (default 3.0).
         """
         with self._lock:
             face_state = self._modules["face"].get_state() if "face" in self._modules else None
@@ -247,7 +257,7 @@ class TotemDaemon:
 
         with self._lock:
             if face_state is not None and "face" in self._modules:
-                self._modules["face"].handle_command("expression", {"name": "smile"})
+                self._modules["face"].handle_command("expression", {"name": "happy"})
             if lcd_state is not None and "lcd" in self._modules:
                 self._modules["lcd"].handle_command("clear", {})
 
