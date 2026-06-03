@@ -1,9 +1,12 @@
 """
-Face Module - MAX7219 8x8 LED Matrix
-=====================================
+Mouth Module - MAX7219 8x8 LED Matrix
+======================================
 
-Exposes the full Pillow ImageDraw API on an 8x8 pixel canvas, plus
-named expressions and background animations.
+The full 8x8 canvas displays mouth expressions. No face outline — the physical
+face is a 3D-printed body and the eyes are the ultrasonic distance sensor.
+
+Exposes the full Pillow ImageDraw API on the 8x8 canvas, plus named mouth
+expressions and background animations.
 
 Hardware: MAX7219 via SPI (port=0, device=0)
 Wiring:   DIN->GPIO10(MOSI), CS->GPIO8(CE0), CLK->GPIO11(SCLK), VCC->5V, GND->GND
@@ -320,8 +323,8 @@ class FaceModule(HardwareModule):
         self._stop_animation()
         # Save current buffer
         saved = self._buffer.copy()
-        # Draw blink frame
-        self._draw_grid(expr_lib.BLINK)
+        # Flash a smirk (wink equivalent without eyes)
+        self._draw_grid(expr_lib.SMIRK)
         self._flush()
         time.sleep(duration_ms / 1000.0)
         # Restore
@@ -531,19 +534,19 @@ class FaceModule(HardwareModule):
                 self._anim_stop.wait(0.4)
 
     def _anim_idle_blink(self, duration):
-        """Neutral face with periodic random blinks."""
+        """Neutral face with periodic random smirks (wink equivalent without eyes)."""
         end_time = time.time() + duration if duration > 0 else float("inf")
         while time.time() < end_time and not self._anim_stop.is_set():
             # Show neutral
             self._draw_grid(expr_lib.NEUTRAL)
             self._flush()
-            # Wait random interval before blinking
+            # Wait random interval before smirking
             wait = random.uniform(2.0, 5.0)
             self._anim_stop.wait(wait)
             if self._anim_stop.is_set():
                 break
-            # Blink
-            self._draw_grid(expr_lib.BLINK)
+            # Quick smirk
+            self._draw_grid(expr_lib.SMIRK)
             self._flush()
             self._anim_stop.wait(0.15)
 
