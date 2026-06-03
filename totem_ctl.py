@@ -35,7 +35,7 @@ import os
 import socket
 import sys
 
-SOCKET_PATH = "/tmp/totem.sock"
+SOCKET_PATH = os.path.expanduser("~/.totem/totem.sock")
 BUFFER_SIZE = 65536
 
 
