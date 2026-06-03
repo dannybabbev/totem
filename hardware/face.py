@@ -1,9 +1,12 @@
 """
-Face Module - MAX7219 8x8 LED Matrix
-=====================================
+Mouth Module - MAX7219 8x8 LED Matrix
+======================================
 
-Exposes the full Pillow ImageDraw API on an 8x8 pixel canvas, plus
-named expressions and background animations.
+The full 8x8 canvas displays mouth expressions. No face outline — the physical
+face is a 3D-printed body and the eyes are the ultrasonic distance sensor.
+
+Exposes the full Pillow ImageDraw API on the 8x8 canvas, plus named mouth
+expressions and background animations.
 
 Hardware: MAX7219 via SPI (port=0, device=0)
 Wiring:   DIN->GPIO10(MOSI), CS->GPIO8(CE0), CLK->GPIO11(SCLK), VCC->5V, GND->GND

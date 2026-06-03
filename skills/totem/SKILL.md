@@ -30,7 +30,7 @@ Run `totem_ctl capabilities` to dynamically discover all available hardware modu
 
 ## Quick Reference: Mouth (LED Matrix)
 
-The mouth display is an 8x8 LED grid (command module is still called `face`). Coordinates: (0,0) = top-left, (7,7) = bottom-right. The outer rows/cols are the face outline; rows 2–5 are the **mouth zone** — eyes are handled by the ultrasonic sensor (separate hardware).
+The mouth display is an 8x8 LED grid (command module is still called `face`). Coordinates: (0,0) = top-left, (7,7) = bottom-right. The **entire 8x8 canvas is the mouth** — there is no face outline. The physical face is a 3D-printed body; the eyes are the ultrasonic distance sensor. Design mouth expressions that fill the canvas and read clearly from a distance.
 
 ### Named Expressions
 ```bash
