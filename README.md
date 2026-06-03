@@ -37,7 +37,7 @@ Note: If using Pi 4B, use the CSI port between the HDMI and Audio jack.
 * [ ] **Servo Motor:** SG90 servo for head nod/shake (`hardware/servo.py`).
 * [ ] **Audio:** USB Microphone + Speaker (`hardware/microphone.py`, `hardware/speaker.py`).
 * [ ] **Camera:** USB Webcam for vision (`hardware/camera.py`).
-* [ ] **Sensors:** HC-SR04 distance (`hardware/distance.py`).
+* [x] **Sensors:** HC-SR04 distance + wave detection (`hardware/distance.py`).
 * [x] **Temperature:** DHT11 temperature & humidity sensor (`hardware/temperature.py`).
 * [x] **Touch:** Capacitive touch sensor (`hardware/touch.py`) — with real-time event notifications to OpenClaw.
 * [ ] **Lighting:** WS2812B NeoPixel LED strip (`hardware/neopixel.py`).
@@ -289,9 +289,10 @@ totem_daemon.py (background service)
 hardware/ package
     ├── face.py    → MAX7219 LED Matrix (SPI)
     ├── lcd.py     → 1602 LCD Display (I2C)
-    ├── touch.py   → TTP223 Touch Sensor (GPIO) ← emits events → OpenClaw
+    ├── touch.py       → TTP223 Touch Sensor (GPIO) ← emits events → OpenClaw
     ├── temperature.py → DHT11 Temp/Humidity (GPIO) ← emits events → OpenClaw
-    └── (future)   → servo.py, mic.py, distance.py, ...
+    ├── distance.py    → HC-SR04 Ultrasonic + Wave (GPIO) ← emits events → OpenClaw
+    └── (future)       → servo.py, mic.py, neopixel.py, ...
 ```
 
 ### Project File Structure
@@ -304,16 +305,19 @@ totem/
 │   ├── face.py                # MAX7219 face (expressions, drawing, animations)
 │   ├── lcd.py                 # 1602 LCD (text, custom chars, full HD44780 API)
 │   ├── touch.py               # TTP223 touch sensor (events → OpenClaw)
-│   └── temperature.py         # DHT11 temperature & humidity (events → OpenClaw)
+│   ├── temperature.py         # DHT11 temperature & humidity (events → OpenClaw)
+│   └── distance.py            # HC-SR04 ultrasonic + wave detection (events → OpenClaw)
 ├── expressions.py             # Face bitmap library (all 8x8 grids)
 ├── totem_daemon.py            # Background daemon (Unix socket server)
 ├── totem_ctl.py               # CLI client (sends JSON commands to daemon)
+├── totem.log                  # Daemon log file (auto-created, rotates at 5 MB)
 ├── skills/
 │   └── totem/
 │       └── SKILL.md           # OpenClaw skill definition
 ├── face.py                    # Original face test script
 ├── lcd_test.py                # Original LCD test script
 ├── test_touch.py              # Touch sensor standalone test script
+├── test_distance.py           # HC-SR04 standalone test + wave detection
 ├── totem_core.py              # Original combined demo script
 ├── requirements.txt           # Python dependencies
 ├── CONTRIBUTING.md            # Guide for adding new hardware modules
@@ -359,15 +363,41 @@ systemctl --user stop totem-daemon.service
 # Start it
 systemctl --user start totem-daemon.service
 
-# View logs
-journalctl --user -u totem-daemon.service -f
-
 # Disable auto-start (if needed)
 systemctl --user disable totem-daemon.service
 
 # Re-enable auto-start
 systemctl --user enable totem-daemon.service
 ```
+
+### Viewing Logs
+
+The daemon writes structured logs to two places simultaneously:
+
+| Destination | How to read |
+|-------------|-------------|
+| `~/totem/totem.log` | `tail -f ~/totem/totem.log` |
+| stdout → systemd journal | `journalctl --user -u totem-daemon.service -f` |
+
+The file log rotates automatically at **5 MB**, keeping up to **3 backups** (`totem.log.1`, `totem.log.2`, `totem.log.3`). Log entries look like:
+
+```
+2026-06-03 12:00:01 [INFO] Daemon ready. Modules: [face, lcd, touch, distance]
+2026-06-03 12:00:15 [INFO] EVENT distance: wave_detected {'wave_count': 1, 'distance_cm': 14.2}
+2026-06-03 12:00:15 [DEBUG] openclaw event dispatched: distance wave_detected
+2026-06-03 12:00:22 [WARNING] openclaw event failed (exit 1): connection refused
+```
+
+Log levels:
+
+| Level | Used for |
+|-------|----------|
+| `INFO` | Normal operation — startup, events, commands |
+| `DEBUG` | Verbose detail — cooldown skips, successful dispatches |
+| `WARNING` | Recoverable issues — failed OpenClaw dispatch, cleanup errors |
+| `ERROR` | Unexpected failures — client handler crashes |
+
+If the `openclaw system event` command is failing silently, the warning line will show the exact exit code and stderr from the binary. No need to patch the code to debug it.
 
 ### Testing with the CLI
 
