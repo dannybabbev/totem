@@ -13,6 +13,7 @@ Usage:
 
 Socket: /tmp/totem.sock
 PID file: /tmp/totem.pid
+Log file: totem.log  (same directory as this script)
 
 Protocol:
     Client sends JSON:  {"module": "face", "action": "expression", "params": {"name": "happy"}}
@@ -23,6 +24,8 @@ Protocol:
 """
 
 import json
+import logging
+import logging.handlers
 import os
 import shutil
 import signal
@@ -38,8 +41,12 @@ import traceback
 from hardware.base import HardwareModule
 
 SOCKET_PATH = "/tmp/totem.sock"
-PID_FILE = "/tmp/totem.pid"
+PID_FILE    = "/tmp/totem.pid"
 BUFFER_SIZE = 65536
+
+LOG_FILE     = os.path.join(os.path.dirname(os.path.abspath(__file__)), "totem.log")
+LOG_MAX_BYTES = 5 * 1024 * 1024   # 5 MB per file
+LOG_BACKUP_COUNT = 3               # keep totem.log + 3 rotated backups
 
 # Per-module OpenClaw dispatch defaults.
 # Set a module to False to disable push notifications at startup.
@@ -48,6 +55,30 @@ NOTIFY_DEFAULTS = {
     "touch":    True,
     "distance": True,
 }
+
+
+def _setup_logging():
+    fmt = logging.Formatter(
+        fmt="%(asctime)s [%(levelname)s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    root = logging.getLogger()
+    root.setLevel(logging.DEBUG)
+
+    # stdout — captured by systemd journal when running as a service
+    stream = logging.StreamHandler(sys.stdout)
+    stream.setFormatter(fmt)
+    root.addHandler(stream)
+
+    # rotating file — easy to tail -f totem.log locally
+    fh = logging.handlers.RotatingFileHandler(
+        LOG_FILE, maxBytes=LOG_MAX_BYTES, backupCount=LOG_BACKUP_COUNT
+    )
+    fh.setFormatter(fmt)
+    root.addHandler(fh)
+
+
+log = logging.getLogger(__name__)
 
 
 class TotemDaemon:
@@ -60,12 +91,12 @@ class TotemDaemon:
         self._lock = threading.Lock()
 
         # Event system
-        self._events = []  # timestamped event log
+        self._events = []
         self._events_lock = threading.Lock()
         self._notify_enabled = os.environ.get("TOTEM_NOTIFY_ENABLED", "true").lower() != "false"
         self._module_notify = dict(NOTIFY_DEFAULTS)  # per-module toggle, see NOTIFY_DEFAULTS
         self._openclaw_bin = shutil.which("openclaw")
-        self._last_notify_time = 0  # timestamp of last OpenClaw notification
+        self._last_notify_time = 0
         self._notify_cooldown = 5   # minimum seconds between notifications
 
     # --- Module discovery and initialization --------------------------------
@@ -81,7 +112,7 @@ class TotemDaemon:
         for filename in os.listdir(hardware_dir):
             if filename.startswith("_") or not filename.endswith(".py"):
                 continue
-            module_name = filename[:-3]  # strip .py
+            module_name = filename[:-3]
             try:
                 mod = importlib.import_module(f"hardware.{module_name}")
                 for attr_name in dir(mod):
@@ -93,20 +124,19 @@ class TotemDaemon:
                     ):
                         instance = attr()
                         self._modules[instance.name] = instance
-                        print(f"  [OK] Discovered module: {instance.name} ({instance.description})")
+                        log.info("Discovered module: %s (%s)", instance.name, instance.description)
             except Exception as e:
-                print(f"  [WARN] Failed to load hardware.{module_name}: {e}")
+                log.warning("Failed to load hardware.%s: %s", module_name, e)
 
     def init_modules(self):
         """Initialize all discovered hardware modules."""
         for name, module in list(self._modules.items()):
             try:
                 module.init()
-                # Wire up event callback so sensor modules can emit events
                 module.set_event_callback(self._on_event)
-                print(f"  [OK] Initialized: {name}")
+                log.info("Initialized: %s", name)
             except Exception as e:
-                print(f"  [FAIL] Could not init {name}: {e}")
+                log.error("Could not init %s: %s", name, e)
                 del self._modules[name]
 
     def cleanup_modules(self):
@@ -114,9 +144,9 @@ class TotemDaemon:
         for name, module in self._modules.items():
             try:
                 module.cleanup()
-                print(f"  [OK] Cleaned up: {name}")
+                log.info("Cleaned up: %s", name)
             except Exception as e:
-                print(f"  [WARN] Cleanup failed for {name}: {e}")
+                log.warning("Cleanup failed for %s: %s", name, e)
 
     # --- Event system -------------------------------------------------------
 
@@ -134,13 +164,12 @@ class TotemDaemon:
             "timestamp_iso": time.strftime("%Y-%m-%dT%H:%M:%S"),
         }
 
-        # Store in event queue
         with self._events_lock:
             self._events.append(event)
             if len(self._events) > 100:
                 self._events = self._events[-100:]
 
-        print(f"  [EVENT] {module_name}: {event_type} {data}")
+        log.info("EVENT %s: %s %s", module_name, event_type, data)
 
         def _dispatch_if_allowed():
             if self._notify_enabled and self._module_notify.get(module_name, True) and self._openclaw_bin:
@@ -161,7 +190,7 @@ class TotemDaemon:
                 ).start()
                 _dispatch_if_allowed()
             else:
-                print(f"  [SKIP] Touch cooldown ({self._notify_cooldown}s)")
+                log.debug("Touch event skipped — cooldown (%ss)", self._notify_cooldown)
 
         elif event_type == "wave_detected":
             now = time.time()
@@ -175,7 +204,7 @@ class TotemDaemon:
                 ).start()
                 _dispatch_if_allowed()
             else:
-                print(f"  [SKIP] Wave cooldown ({self._notify_cooldown}s)")
+                log.debug("Wave event skipped — cooldown (%ss)", self._notify_cooldown)
 
         elif event_type in ("temperature_alert", "humidity_alert"):
             now = time.time()
@@ -195,7 +224,7 @@ class TotemDaemon:
                         })
                 _dispatch_if_allowed()
             else:
-                print(f"  [SKIP] Alert cooldown ({self._notify_cooldown}s)")
+                log.debug("Alert event skipped — cooldown (%ss)", self._notify_cooldown)
 
     def _react_and_restore(self, face_expr, lcd_line1, lcd_line2, hold_sec=1.5):
         """
@@ -203,7 +232,6 @@ class TotemDaemon:
         the previous state. Runs in a background thread — never blocks the caller.
         The lock is released during the sleep so CLI commands remain responsive.
         """
-        # Step 1: snapshot current state and apply reaction
         with self._lock:
             face_state = self._modules["face"].get_state() if "face" in self._modules else None
             lcd_state  = self._modules["lcd"].get_state()  if "lcd"  in self._modules else None
@@ -214,10 +242,8 @@ class TotemDaemon:
                     "line1": lcd_line1, "line2": lcd_line2, "align": "center",
                 })
 
-        # Step 2: hold (lock released so other commands go through)
         time.sleep(hold_sec)
 
-        # Step 3: restore previous state
         with self._lock:
             if face_state is not None and "face" in self._modules:
                 prev_expr = face_state.get("current_expression") or "neutral"
@@ -232,14 +258,13 @@ class TotemDaemon:
     def _dispatch_openclaw_event(self, event):
         """
         Notify OpenClaw by running: openclaw system event --text "..." --mode now
-        Runs in a background thread so it never blocks GPIO callbacks.
+        Runs in a background thread. Uses subprocess.run so we can log failures.
         """
-        module = event["module"]
+        module     = event["module"]
         event_type = event["event"]
-        data = event["data"]
-        ts = event["timestamp_iso"]
+        data       = event["data"]
+        ts         = event["timestamp_iso"]
 
-        # Build a descriptive text for the agent
         parts = [f"{module} sensor: {event_type} at {ts}."]
         if "touch_count" in data:
             parts.append(f"Touch count: {data['touch_count']}.")
@@ -258,15 +283,26 @@ class TotemDaemon:
         text = " ".join(parts)
 
         try:
-            subprocess.Popen(
+            result = subprocess.run(
                 [self._openclaw_bin, "system", "event", "--text", text, "--mode", "now"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
+            if result.returncode != 0:
+                log.warning(
+                    "openclaw event failed (exit %d): %s",
+                    result.returncode,
+                    result.stderr.strip() or result.stdout.strip(),
+                )
+            else:
+                log.debug("openclaw event dispatched: %s %s", module, event_type)
         except FileNotFoundError:
-            print("  [WARN] openclaw binary not found, cannot dispatch event")
+            log.warning("openclaw binary not found, cannot dispatch event")
+        except subprocess.TimeoutExpired:
+            log.warning("openclaw event timed out after 10s")
         except Exception as e:
-            print(f"  [WARN] Failed to dispatch event to OpenClaw: {e}")
+            log.error("Failed to dispatch event to OpenClaw: %s", e)
 
     def _get_events(self, peek=False):
         """Return pending events. If peek=False, clears the queue."""
@@ -285,22 +321,18 @@ class TotemDaemon:
         except json.JSONDecodeError as e:
             return {"ok": False, "error": f"Invalid JSON: {e}"}
 
-        # Batch command
         if "batch" in msg:
             return self._handle_batch(msg["batch"])
 
-        # System commands (no module specified)
-        action = msg.get("action", "")
+        action      = msg.get("action", "")
         module_name = msg.get("module", "")
 
         if not module_name:
             return self._handle_system(action, msg.get("params", {}))
 
-        # Compound "totem" module for coordinated actions
         if module_name == "totem":
             return self._handle_compound(action, msg.get("params", {}))
 
-        # Module-specific command
         if module_name not in self._modules:
             return {
                 "ok": False,
@@ -358,6 +390,7 @@ class TotemDaemon:
             if module is None or enabled is None:
                 return {"ok": True, "data": {"module_notify": self._module_notify}}
             self._module_notify[module] = bool(enabled)
+            log.info("Notify toggle: %s -> %s", module, bool(enabled))
             return {"ok": True, "data": {"module": module, "enabled": bool(enabled)}}
 
         return {"ok": False, "error": f"Unknown system action '{action}'"}
@@ -365,20 +398,15 @@ class TotemDaemon:
     def _handle_compound(self, action, params):
         """Handle compound totem-level actions that coordinate multiple modules."""
         if action == "express":
-            # Coordinated emotion: face expression + LCD message
             emotion = params.get("emotion", "neutral")
             message = params.get("message", "")
-            duration = float(params.get("duration", 0))
-
             results = []
 
-            # Set face expression
             if "face" in self._modules:
                 with self._lock:
                     r = self._modules["face"].handle_command("expression", {"name": emotion})
                     results.append(r)
 
-            # Set LCD text
             if "lcd" in self._modules and message:
                 line1 = message[:16]
                 line2 = message[16:32] if len(message) > 16 else ""
@@ -397,56 +425,48 @@ class TotemDaemon:
 
     def start(self):
         """Start the daemon: discover modules, init hardware, listen on socket."""
-        print("=" * 50)
-        print("  TOTEM DAEMON")
-        print("=" * 50)
+        log.info("=" * 48)
+        log.info("  TOTEM DAEMON")
+        log.info("=" * 48)
 
-        # Clean up stale socket
         if os.path.exists(SOCKET_PATH):
             os.unlink(SOCKET_PATH)
 
-        # Write PID file
         with open(PID_FILE, "w") as f:
             f.write(str(os.getpid()))
 
-        # Discover and init hardware
-        print("\n[1/3] Discovering hardware modules...")
+        log.info("[1/3] Discovering hardware modules...")
         self.discover_modules()
 
         if not self._modules:
-            print("\n  [WARN] No hardware modules found! Running in headless mode.")
+            log.warning("No hardware modules found — running in headless mode")
         else:
-            print(f"\n[2/3] Initializing {len(self._modules)} module(s)...")
+            log.info("[2/3] Initializing %d module(s)...", len(self._modules))
             self.init_modules()
 
-        # Start socket server
-        print(f"\n[3/3] Starting socket server at {SOCKET_PATH}")
+        log.info("[3/3] Starting socket server at %s", SOCKET_PATH)
         self._server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self._server.bind(SOCKET_PATH)
         self._server.listen(5)
-        self._server.settimeout(1.0)  # Allow periodic interrupt check
+        self._server.settimeout(1.0)
         self._running = True
 
-        # Handle signals
         signal.signal(signal.SIGTERM, self._handle_signal)
         signal.signal(signal.SIGINT, self._handle_signal)
 
         modules_str = ", ".join(self._modules.keys()) if self._modules else "none"
-        notify_str = "enabled" if (self._notify_enabled and self._openclaw_bin) else "disabled"
+        notify_str  = "enabled" if (self._notify_enabled and self._openclaw_bin) else "disabled"
         if self._notify_enabled and not self._openclaw_bin:
             notify_str = "disabled (openclaw binary not found)"
-        print(f"\n  Daemon ready. Modules: [{modules_str}]")
-        print(f"  PID: {os.getpid()}")
-        print(f"  Socket: {SOCKET_PATH}")
-        print(f"  OpenClaw notify: {notify_str}")
-        print("  Press Ctrl+C to stop.\n")
 
-        # Main loop
+        log.info("Daemon ready. Modules: [%s]", modules_str)
+        log.info("PID: %d | Socket: %s | OpenClaw notify: %s", os.getpid(), SOCKET_PATH, notify_str)
+        log.info("Log file: %s", LOG_FILE)
+
         while self._running:
             try:
                 conn, _ = self._server.accept()
-                thread = threading.Thread(target=self._handle_client, args=(conn,), daemon=True)
-                thread.start()
+                threading.Thread(target=self._handle_client, args=(conn,), daemon=True).start()
             except socket.timeout:
                 continue
             except OSError:
@@ -465,17 +485,17 @@ class TotemDaemon:
                 if not chunk:
                     break
                 data += chunk
-                # Try to parse -- simple protocol: one JSON message per connection
                 try:
                     json.loads(data)
-                    break  # Valid JSON received
+                    break
                 except json.JSONDecodeError:
-                    continue  # Keep reading
+                    continue
 
             if data:
                 response = self.handle_message(data.decode("utf-8"))
                 conn.sendall(json.dumps(response).encode("utf-8"))
         except Exception as e:
+            log.error("Client handler error: %s", e)
             error_response = {"ok": False, "error": str(e)}
             try:
                 conn.sendall(json.dumps(error_response).encode("utf-8"))
@@ -484,33 +504,29 @@ class TotemDaemon:
         finally:
             conn.close()
 
-    def _handle_signal(self, signum, frame):
+    def _handle_signal(self, signum, _):
         """Handle SIGTERM/SIGINT for graceful shutdown."""
-        print(f"\n  Received signal {signum}, shutting down...")
+        log.info("Received signal %d, shutting down...", signum)
         self._running = False
 
     def _shutdown(self):
         """Clean shutdown: cleanup modules, close socket, remove files."""
-        print("\n  Shutting down...")
-
-        # Cleanup hardware
+        log.info("Shutting down...")
         self.cleanup_modules()
 
-        # Close socket
         if self._server:
             try:
                 self._server.close()
             except Exception:
                 pass
 
-        # Remove socket and pid files
         for path in (SOCKET_PATH, PID_FILE):
             try:
                 os.unlink(path)
             except OSError:
                 pass
 
-        print("  Daemon stopped.")
+        log.info("Daemon stopped.")
 
 
 # ---------------------------------------------------------------------------
@@ -526,14 +542,12 @@ def check_status():
     with open(PID_FILE) as f:
         pid = int(f.read().strip())
 
-    # Check if process is alive
     try:
         os.kill(pid, 0)
         print(f"Totem daemon is running (PID {pid}).")
         return True
     except OSError:
         print("Totem daemon is not running (stale PID file).")
-        # Clean up stale files
         for path in (PID_FILE, SOCKET_PATH):
             try:
                 os.unlink(path)
@@ -564,5 +578,6 @@ if __name__ == "__main__":
     elif "--stop" in sys.argv:
         stop_daemon()
     else:
+        _setup_logging()
         daemon = TotemDaemon()
         daemon.start()
