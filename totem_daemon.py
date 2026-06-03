@@ -180,31 +180,32 @@ class TotemDaemon:
                 ).start()
 
         if event_type == "touched":
+            touch_num = data.get("touch_count", "?")
+            threading.Thread(
+                target=self._react_and_restore,
+                args=("surprised", "I felt that!", f"Touch #{touch_num}"),
+                daemon=True,
+            ).start()
             now = time.time()
             if now - self._last_notify_time >= self._notify_cooldown:
                 self._last_notify_time = now
-                threading.Thread(
-                    target=self._react_and_restore,
-                    args=("surprised", "I felt that!", "Thinking..."),
-                    daemon=True,
-                ).start()
                 _dispatch_if_allowed()
             else:
-                log.debug("Touch event skipped — cooldown (%ss)", self._notify_cooldown)
+                log.debug("Touch notification skipped — cooldown (%ss)", self._notify_cooldown)
 
         elif event_type == "wave_detected":
+            wave_num = data.get("wave_count", "?")
+            threading.Thread(
+                target=self._react_and_restore,
+                args=("happy", "Hey, I saw that!", f"Wave #{wave_num} :)"),
+                daemon=True,
+            ).start()
             now = time.time()
             if now - self._last_notify_time >= self._notify_cooldown:
                 self._last_notify_time = now
-                wave_num = data.get("wave_count", "?")
-                threading.Thread(
-                    target=self._react_and_restore,
-                    args=("happy", "Hey, I saw that!", f"Wave #{wave_num} :)"),
-                    daemon=True,
-                ).start()
                 _dispatch_if_allowed()
             else:
-                log.debug("Wave event skipped — cooldown (%ss)", self._notify_cooldown)
+                log.debug("Wave notification skipped — cooldown (%ss)", self._notify_cooldown)
 
         elif event_type in ("temperature_alert", "humidity_alert"):
             now = time.time()
