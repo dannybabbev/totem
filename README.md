@@ -268,6 +268,37 @@ This is a 3-pin breakout board (PCB with built-in pull-up resistor), so no exter
 
 **Test:** Run `python test_temperature.py`. You should see temperature and humidity readings every 3 seconds. Press `Ctrl+C` to exit.
 
+### 5. Distance / Wave Sensor (HC-SR04)
+
+*Connects via GPIO. TRIG runs on 3.3V logic, but the sensor itself is powered at 5V — ECHO's 5V output must be stepped down before reaching the Pi.*
+
+| Sensor Pin | Connect To | Function |
+| --- | --- | --- |
+| **VCC** | **Red Rail** (5V) | Power |
+| **GND** | **Blue Rail** (GND) | Ground |
+| **TRIG** | `GPIO 23` (Pin 16) | Trigger output (3.3V, safe to connect directly) |
+| **ECHO** | `GPIO 24` (Pin 18) **via voltage divider** | Echo input (5V — must be stepped down) |
+
+#### Wiring the ECHO Voltage Divider
+
+The HC-SR04 returns its ECHO pulse at 5V, but the Pi's GPIO pins only tolerate 3.3V. Build a simple voltage divider with a 1kΩ and a 2kΩ resistor:
+
+1. **ECHO pin → 1kΩ resistor → node A**
+2. **node A → 2kΩ resistor → GND (Blue Rail)**
+3. **node A → `GPIO 24` (Pin 18)**
+
+This divides the 5V signal down to `5V x 2k/(1k+2k) = 3.33V`, which is safe for the Pi's input.
+
+The robot's 3D-printed face uses this sensor as its **eyes** — the same sensor that measures distance also detects wave gestures in front of the face.
+
+**Required packages:** `rpi-lgpio` (installed via `requirements.txt`) — accessed through the `lgpio` API (`gpiochip_open`, `gpio_claim_output`, `gpio_claim_input`).
+
+**How it works:** A 10µs pulse on TRIG triggers the sensor to emit ultrasound. ECHO then goes high for the time it takes the echo to return; distance is computed as `(echo_duration_seconds * 34300) / 2` cm (speed of sound = 34300 cm/s, divided by 2 for the round trip). Readings below `MIN_VALID_DIST` (2cm) are discarded as noise spikes, and reads that exceed `ECHO_TIMEOUT` (50ms, ~8m range) return `None`.
+
+**Wave detection:** `hardware/distance.py` polls the sensor every `DEFAULT_INTERVAL` (0.3s) and tracks a slow-moving baseline distance (EMA with `BASELINE_ALPHA = 0.05`). A wave is detected when the reading drops more than `DEFAULT_WAVE_THRESHOLD` (10cm) below baseline for `DEFAULT_DEBOUNCE_COUNT` (3) consecutive reads, then rises back above the threshold again within `DEFAULT_MAX_WAVE_DURATION` (2.0s). If the hand stays in front of the sensor longer than that, it's treated as "holding" rather than a wave and the state simply resets.
+
+**Test:** Run `python test_distance.py`. It calibrates a baseline over 10 readings, then prints live distance readings and prints "** WAVE DETECTED **" when you wave your hand in front of the sensor. Press `Ctrl+C` to exit.
+
 ## Part III: The Core (Combined)
 
 Run `python totem_core.py` to synchronize both the Face and LCD.
